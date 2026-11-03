@@ -6,6 +6,13 @@ import "./styles/OCRConfirmation.css";
 
 const isPdf = (url) => /\.pdf(\?|#|$)/i.test(url || "");
 
+// Normalize names for comparison.
+const normalizeName = (name) =>
+  String(name || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+
 export default function OCRConfirmation({
   ocrResult = null,
   studentId = "",
@@ -23,6 +30,10 @@ export default function OCRConfirmation({
   const [suggested, setSuggested] = useState(false);
 
   const [pickedStudent, setPickedStudent] = useState(null);
+  const [editedStudentName, setEditedStudentName] = useState("");
+
+  const [studentLookupStatus, setStudentLookupStatus] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [previewError, setPreviewError] = useState(false);
 
@@ -41,6 +52,7 @@ export default function OCRConfirmation({
     setPreviewError(false);
   }, [previewUrl]);
 
+  // OCR-extracted name.
   const ocrName = {
     first: ocrResult?.first_name || "",
     middle: ocrResult?.middle_name || "",
@@ -55,7 +67,26 @@ export default function OCRConfirmation({
     .filter(Boolean)
     .join(" ");
 
-  const candidates = ocrResult?.student_candidates || [];
+  // Possible student matches returned by the backend.
+  const candidates = Array.isArray(ocrResult?.student_candidates)
+    ? ocrResult.student_candidates
+    : [];
+
+  const matchedStudent = ocrResult?.matched_student || null;
+
+  // Combine matched student and possible candidates.
+  // Remove duplicate records using student_id.
+  const studentOptions = [
+    ...(matchedStudent ? [matchedStudent] : []),
+    ...candidates,
+  ].filter(
+    (student, index, self) =>
+      student?.student_id &&
+      self.findIndex(
+        (s) =>
+          String(s.student_id) === String(student.student_id)
+      ) === index
+  );
 
   // 1. Load document types from the database.
   useEffect(() => {
@@ -72,6 +103,7 @@ export default function OCRConfirmation({
 
         if (error) {
           console.error("Failed to load document types:", error);
+
           setDocsError(
             "Could not load document types from the database."
           );
@@ -92,6 +124,7 @@ export default function OCRConfirmation({
         if (cancelled) return;
 
         console.error("Error loading document types:", error);
+
         setDocsError(
           "Could not load document types from the database."
         );
@@ -171,41 +204,170 @@ export default function OCRConfirmation({
     setSuggested(false);
   }, [docs, ocrResult, detectedDocType]);
 
-  // 3. Automatically select the student matched by OCR.
-  // Student Profile scans use the existing studentId prop.
-  useEffect(() => {
-    if (studentId) {
+
+// 3. Initialize the editable student name whenever a new scan loads.
+useEffect(() => {
+    const initialName = studentId
+        ? studentName
+        : ocrFullName;
+
+    setEditedStudentName(initialName);
+    setPickedStudent(null);
+    setStudentLookupStatus("");
+
+    // Automatically search the database using the OCR name.
+    // No need to edit or blur the Student Name field.
+    if (!studentId && initialName.trim()) {
+        handleStudentNameBlur(initialName);
+    }
+}, [ocrResult, studentId, studentName]);
+
+
+// 4. Find the student record using the provided name.
+const handleStudentNameBlur = async (
+    nameToCheck = editedStudentName
+) => {
+    const searchName = nameToCheck.trim();
+
+    if (!searchName) {
       setPickedStudent(null);
+      setStudentLookupStatus(
+        "Please enter the student's name."
+      );
       return;
     }
 
-    setPickedStudent(ocrResult?.matched_student ?? null);
-  }, [ocrResult, studentId]);
+    // Existing Student Profile scans already have a student ID.
+    if (studentId) {
+      setStudentLookupStatus(
+        "Existing student record."
+      );
+      return;
+    }
 
-  // 4. Determine the final student information.
+    setStudentLookupStatus("Checking student record...");
+
+    setPickedStudent(null);
+
+    try {
+      // First: check the candidates already returned by OCR.
+      const candidateMatch = studentOptions.find((student) => {
+        const fullName = [
+          student.first_name,
+          student.middle_name,
+          student.last_name,
+        ]
+          .filter(Boolean)
+          .join(" ");
+
+        return (
+          normalizeName(fullName) ===
+          normalizeName(searchName)
+        );
+      });
+
+      if (candidateMatch) {
+        setPickedStudent(candidateMatch);
+
+        setStudentLookupStatus(
+          "Student record found. Student ID automatically loaded."
+        );
+        return;
+      }
+
+      // Second: search the actual student table.
+      // Assumes student name columns are first_name,
+      // middle_name, and last_name.
+      const nameParts = searchName
+        .split(/\s+/)
+        .filter(Boolean);
+
+      if (nameParts.length < 2) {
+        setStudentLookupStatus(
+          "Please enter the student's complete name."
+        );
+        return;
+      }
+
+      const firstName = nameParts[0];
+      const lastName = nameParts[nameParts.length - 1];
+      const middleName = nameParts
+        .slice(1, -1)
+        .join(" ");
+
+      let query = supabase
+        .from("tbl_student")
+        .select(
+          "student_id, first_name, middle_name, last_name"
+        )
+        .ilike("first_name", firstName)
+        .ilike("last_name", lastName);
+
+      if (middleName) {
+        query = query.ilike("middle_name", middleName);
+      }
+
+      const { data, error } = await query.limit(2);
+
+      if (error) {
+        console.error(
+          "Student name lookup failed:",
+          error
+        );
+
+        setStudentLookupStatus(
+          "Could not verify the student name. Please try again."
+        );
+        return;
+      }
+
+      // Only accept one unambiguous database match.
+      if (data?.length === 1) {
+        setPickedStudent(data[0]);
+
+        setStudentLookupStatus(
+          "Student record found. Student ID automatically loaded."
+        );
+      } else if (data?.length > 1) {
+        setStudentLookupStatus(
+          "Multiple student records found. Please check the complete name."
+        );
+      } else {
+        setStudentLookupStatus(
+          "No matching student record found. Please check the spelling."
+        );
+      }
+    } catch (error) {
+      console.error(
+        "Error checking student name:",
+        error
+      );
+
+      setStudentLookupStatus(
+        "An error occurred while checking the student record."
+      );
+    }
+  };
+
+  // 5. Determine the final student information.
   const finalStudentId =
     studentId || pickedStudent?.student_id || "";
 
-  const finalStudentName =
-    studentName ||
-    (pickedStudent
-      ? [
-          pickedStudent.first_name,
-          pickedStudent.middle_name,
-          pickedStudent.last_name,
-        ]
-          .filter(Boolean)
-          .join(" ")
-      : ocrFullName);
+  const finalStudentName = editedStudentName.trim();
 
-  // 5. Save the confirmed document.
+  // 6. Save the confirmed document.
   const handleSave = async () => {
     if (!documentId || saving) return;
 
     if (!finalStudentId) {
       alert(
-        "No student matched. Please select the correct student before saving."
+        "No matching student record found. Please correct the student name before saving."
       );
+      return;
+    }
+
+    if (!finalStudentName) {
+      alert("Please enter the student's name.");
       return;
     }
 
@@ -245,19 +407,21 @@ export default function OCRConfirmation({
         fileName,
         fileUrl: previewUrl,
 
-        // Include the original scan data for the parent save handler.
+        // Include original scanned image data.
         imageDataUrl: previewUrl.startsWith("data:image/")
           ? previewUrl
           : "",
 
-        // Include the selected student record if available.
-        matchedStudent:
-  pickedStudent ||
-  ocrResult?.matched_student ||
-  null,
+        // Include the confirmed student record.
+        matchedStudent: studentId
+          ? matchedStudent
+          : pickedStudent || null,
       });
     } catch (error) {
-      console.error("OCR confirmation save failed:", error);
+      console.error(
+        "OCR confirmation save failed:",
+        error
+      );
 
       alert(
         error instanceof Error
@@ -395,31 +559,55 @@ export default function OCRConfirmation({
                       : "Could not detect the type. Please choose one.")}
                 </p>
 
-                {documentTypeConfidence != null && (
-                  <p className="ocr-field-hint">
-                    Detection confidence:{" "}
-                    {Number(documentTypeConfidence) <= 1
-                      ? `${(
-                          Number(documentTypeConfidence) * 100
-                        ).toFixed(1)}%`
-                      : `${Number(
-                          documentTypeConfidence
-                        ).toFixed(1)}%`}
-                  </p>
-                )}
+                {documentTypeConfidence != null &&
+                  documentTypeConfidence !== "" &&
+                  Number.isFinite(Number(documentTypeConfidence)) && (
+                    <p className="ocr-field-hint">
+                      Detection confidence:{" "}
+                      {(
+                        Number(documentTypeConfidence) <= 1
+                          ? Number(documentTypeConfidence) * 100
+                          : Number(documentTypeConfidence)
+                      ).toFixed(1)}
+                      %
+                    </p>
+                  )}
               </div>
 
-              {/* MATCHED STUDENT */}
-              <div className="ocr-info-row">
-                <span className="ocr-info-label">
+              {/* EDITABLE STUDENT NAME */}
+              <div className="ocr-field-group">
+                <label
+                  className="ocr-field-label"
+                  htmlFor="ocr-student-name"
+                >
                   Student name
-                </span>
+                </label>
 
-                <span className="ocr-info-value">
-                  {finalStudentName || "—"}
-                </span>
+                <input
+                  id="ocr-student-name"
+                  type="text"
+                  className="ocr-field-select ocr-student-name-input"
+                  value={editedStudentName}
+                  onChange={(e) => {
+                    setEditedStudentName(e.target.value);
+                    setPickedStudent(null);
+                    setStudentLookupStatus(
+                      "Name edited. Leave this field to verify the student record."
+                    );
+                  }}
+                  onBlur={handleStudentNameBlur}
+                  placeholder="Enter student name"
+                  disabled={saving}
+                  autoComplete="off"
+                />
+
+                <p className="ocr-field-hint">
+                  {studentLookupStatus ||
+                    "Automatically extracted by OCR. Edit the name if needed."}
+                </p>
               </div>
 
+              {/* STUDENT ID */}
               <div className="ocr-info-row">
                 <span className="ocr-info-label">
                   Student ID
@@ -429,36 +617,6 @@ export default function OCRConfirmation({
                   {finalStudentId || "—"}
                 </span>
               </div>
-
-              {/* ALTERNATIVE STUDENT MATCHES */}
-              {!studentId &&
-                !pickedStudent &&
-                candidates.length > 0 && (
-                  <div className="ocr-field-group">
-                    <p className="ocr-field-hint">
-                      No confident match. Select the correct student:
-                    </p>
-
-                    {candidates.map((c) => (
-                      <button
-                        key={c.student_id}
-                        type="button"
-                        className="ocr-cancel-btn"
-                        onClick={() => setPickedStudent(c)}
-                        disabled={saving}
-                      >
-                        {c.student_id} ·{" "}
-                        {[
-                          c.last_name,
-                          c.first_name,
-                          c.middle_name,
-                        ]
-                          .filter(Boolean)
-                          .join(", ")}
-                      </button>
-                    ))}
-                  </div>
-                )}
             </div>
           </div>
 
@@ -485,6 +643,7 @@ export default function OCRConfirmation({
               disabled={
                 !documentId ||
                 !finalStudentId ||
+                !finalStudentName ||
                 !previewUrl ||
                 saving ||
                 !!docsError

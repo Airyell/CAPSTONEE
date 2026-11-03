@@ -201,6 +201,9 @@ export default function StudentProfile({ studentId, onBack }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Document Upload
+  const uploadInputRef = useRef(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
 
   // Preview
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -584,6 +587,57 @@ export default function StudentProfile({ studentId, onBack }) {
       }
     },
   });
+
+  // ============================================================
+// UPLOAD DOCUMENT USING OCR
+// ============================================================
+
+const handleDocumentUpload = async (e) => {
+  const file = e.target.files?.[0];
+
+  // Allow selecting the same file again.
+  e.target.value = "";
+
+  if (!file) return;
+
+  if (!student.student_id) {
+    alert("No student is selected.");
+    return;
+  }
+
+  const allowedTypes = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/bmp",
+    "image/tiff",
+  ];
+
+  if (!allowedTypes.includes(file.type)) {
+    alert(
+      "Unsupported file format. Please upload a JPG, JPEG, PNG, WEBP, BMP, or TIFF image."
+    );
+    return;
+  }
+
+  try {
+    setUploadingFile(true);
+    setError("");
+
+    // Use the same upload/OCR function as Dashboard.
+    await scanner.upload(file);
+
+  } catch (err) {
+    console.error("Document upload OCR error:", err);
+
+    alert(
+      err.message ||
+        "Failed to upload and process the document. Please try again."
+    );
+  } finally {
+    setUploadingFile(false);
+  }
+};
 
   // ============================================================
   // LOAD COLLEGES, PROGRAMS, STUDENT AND DOCUMENTS
@@ -1007,27 +1061,82 @@ export default function StudentProfile({ studentId, onBack }) {
           </div>
 
           <div
-            className="profile-header-actions"
-            style={{ display: "flex", gap: "10px" }}
-          >
-            <button
-              className="profile-edit-btn"
-              onClick={() => scanner.open()}
-            >
-              Scan Document
-            </button>
+  className="profile-header-actions"
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: "10px",
+    width: "50%",
+    maxWidth: "300px",
+    margin: "15px auto 0",
+  }}
+>
+  {/* SCAN DOCUMENT */}
+  <button
+    className="profile-edit-btn"
+    style={{
+      width: "100%",
+      margin: 0,
+      padding: "10px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      textAlign: "center",
+      boxSizing: "border-box",
+    }}
+    onClick={() => scanner.open()}
+    disabled={uploadingFile}
+  >
+    Scan Document
+  </button>
 
-            <button
-              className="profile-edit-btn"
-              onClick={() => {
-                setEditForm(student);
-                setShowEditModal(true);
-              }}
-            >
-              Edit Information
-            </button>
-          </div>
-        </div>
+  {/* UPLOAD DOCUMENT */}
+  <button
+    className="profile-edit-btn"
+    style={{
+      width: "100%",
+      margin: 0,
+      padding: "10px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      textAlign: "center",
+      boxSizing: "border-box",
+    }}
+    onClick={() => uploadInputRef.current?.click()}
+    disabled={uploadingFile}
+  >
+    {uploadingFile ? "Processing..." : "Upload Document"}
+  </button>
+
+  {/* HIDDEN FILE INPUT */}
+  <input
+    ref={uploadInputRef}
+    type="file"
+    accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff"
+    style={{ display: "none" }}
+    onChange={handleDocumentUpload}
+  />
+
+  {/* EDIT INFORMATION */}
+  <button
+    className="profile-edit-btn"
+    style={{
+      gridColumn: "1 / -1",
+      justifySelf: "center",
+      width: "fit-content",
+      margin: 0,
+      textAlign: "center",
+    }}
+    onClick={() => {
+      setEditForm(student);
+      setShowEditModal(true);
+    }}
+  >
+    Edit Information
+  </button>
+</div>
+    </div>
 
         {/* STUDENT INFORMATION */}
         <div className="profile-info-card">
