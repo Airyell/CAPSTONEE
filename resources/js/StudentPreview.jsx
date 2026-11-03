@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 import { supabase } from "./supabaseClient";
 
@@ -109,6 +109,18 @@ export default function StudentPreview({ onBack }) {
 
   const [mainErrors, setMainErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+
+    // Back-to-top button: only shows after scrolling down
+  const [showTopBtn, setShowTopBtn] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setShowTopBtn(window.scrollY > 300);
+    onScroll();
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
   // ── Style helpers (validation-aware) ─────────────────────────
   const inputClass = (hasError) =>
@@ -415,6 +427,18 @@ export default function StudentPreview({ onBack }) {
             </div>
           </div>
         </div>
+      )}
+
+            {/* Back to top button (shows while the form is open and the page is scrolled) */}
+      {showForm && showTopBtn && (
+        <button
+          onClick={scrollToTop}
+          aria-label="Back to top"
+          title="Back to top"
+          className="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-[#D4A017] text-xl font-bold text-white shadow-lg transition hover:bg-[#b8891a] focus:outline-none focus:ring-2 focus:ring-[#0A2342] focus:ring-offset-2"
+        >
+          ↑
+        </button>
       )}
 
       <div className="max-w-4xl mx-auto">
