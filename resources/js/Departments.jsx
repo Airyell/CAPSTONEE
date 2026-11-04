@@ -5,6 +5,52 @@ import "./styles/Departments.css";
 // Number of credential documents each student is expected to have
 const REQUIRED_DOCS = 8;
 
+// document_name stores the uploaded file name (e.g. "Form_138.jpg",
+// "Certification_of_Live_Birth_20261029_105109.jpg"), so each name is reduced
+// to one of the 8 credentials shown in the student profile.
+const CREDENTIAL_KEYS = {
+  "certification of live birth": "Certification of Live Birth",
+  "form 138": "Form 138",
+  "form 137": "Form 137",
+  "good moral": "Good Moral",
+  "grades": "Grades",
+  "transcript of records": "TOR",
+  "tor": "TOR",
+  "leave of absence": "LOA",
+  "loa": "LOA",
+  "withdrawal": "Withdrawal",
+};
+
+const toCredential = (fileName) => {
+  const key = String(fileName ?? "")
+    .replace(/\.[^.]+$/, "") // drop extension
+    .replace(/_\d{8}_\d{6}$/, "") // drop upload timestamp
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .toLowerCase();
+  return CREDENTIAL_KEYS[key] ?? null;
+};
+
+// Set this to the status values that should NOT count toward completion
+const NOT_COUNTED = ["Rejected"];
+
+// rows -> { [student_id]: number of distinct document types on file }
+const countDistinctDocs = (rows) => {
+  const sets = {};
+  (rows ?? []).forEach((d) => {
+    if (NOT_COUNTED.includes(d.status)) return;
+    const credential = toCredential(d.document_name);
+    if (!credential) return;
+    if (!sets[d.student_id]) sets[d.student_id] = new Set();
+    sets[d.student_id].add(credential);
+  });
+  const counts = {};
+  Object.keys(sets).forEach((id) => {
+    counts[id] = sets[id].size;
+  });
+  return counts;
+};
+
 const statusClass = (status) => {
   switch (status) {
     case "Active": return "dept-status-active";
@@ -80,8 +126,14 @@ export default function Departments({ onViewStudent }) {
         const [collegeRes, programRes, studentRes, docRes] = await Promise.all([
           supabase.from("tbl_college").select("*").order("college_name"),
           supabase.from("tbl_program").select("*").order("program_name"),
-          supabase.from("tbl_student").select("student_id, college_id"),
-          supabase.from("tbl_student_documents").select("student_id"),
+          supabase
+            .from("tbl_student")
+            .select("student_id, college_id")
+            .range(0, 49999),
+          supabase
+            .from("tbl_student_documents")
+            .select("student_id, document_name, status")
+            .range(0, 49999),
         ]);
 
         if (collegeRes.error) throw collegeRes.error;
@@ -99,11 +151,13 @@ export default function Departments({ onViewStudent }) {
             (studentsPerCollege[s.college_id] || 0) + 1;
         });
 
+        const docsPerStudent = countDistinctDocs(docRes.data);
         const docsPerCollege = {};
-        (docRes.data ?? []).forEach((d) => {
-          const cid = collegeOfStudent[d.student_id];
+        Object.entries(docsPerStudent).forEach(([sid, count]) => {
+          const cid = collegeOfStudent[sid];
           if (cid != null) {
-            docsPerCollege[cid] = (docsPerCollege[cid] || 0) + 1;
+            docsPerCollege[cid] =
+              (docsPerCollege[cid] || 0) + Math.min(count, REQUIRED_DOCS);
           }
         });
 
@@ -169,19 +223,17 @@ export default function Departments({ onViewStudent }) {
         if (studentErr) throw studentErr;
 
         const ids = (data ?? []).map((s) => s.student_id);
-        const docCount = {};
+        let docCount = {};
 
         if (ids.length > 0) {
           const { data: docs, error: docErr } = await supabase
             .from("tbl_student_documents")
-            .select("student_id")
-            .in("student_id", ids);
+            .select("student_id, document_name, status")
+            .in("student_id", ids)
+            .range(0, 49999);
 
           if (docErr) throw docErr;
-
-          (docs ?? []).forEach((d) => {
-            docCount[d.student_id] = (docCount[d.student_id] || 0) + 1;
-          });
+          docCount = countDistinctDocs(docs);
         }
 
         if (cancelled) return;
@@ -242,12 +294,30 @@ export default function Departments({ onViewStudent }) {
     return filtered.slice(start, start + rowsPerPage);
   }, [filtered, currentPage]);
 
+  // Students in scope: the selected course only (search doesn't change the rate)
+  const scopeStudents = useMemo(
+    () =>
+      filterCourse
+        ? enrichedStudents.filter((s) => s.course === filterCourse)
+        : enrichedStudents,
+    [enrichedStudents, filterCourse]
+  );
+
   const totalStudents = filtered.length;
   const totalDocs = filtered.reduce((sum, s) => sum + s.documents, 0);
-  const completionRate = selectedDept
-    ? filterCourse
-      ? Math.round(50 + (filterCourse.length % 30))
-      : dept?.completion ?? 0
+
+  const completionRate = scopeStudents.length
+    ? Math.min(
+        100,
+        Math.round(
+          (scopeStudents.reduce(
+            (sum, s) => sum + Math.min(s.documents, REQUIRED_DOCS),
+            0
+          ) /
+            (scopeStudents.length * REQUIRED_DOCS)) *
+            100
+        )
+      )
     : 0;
 
   const handleDeptClick = (collegeId) => {
