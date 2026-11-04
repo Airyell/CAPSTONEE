@@ -42,9 +42,8 @@ const credentialNames = [
   "Form 138",
   "Form 137",
   "Good Moral",
-  "Grades",
-  "TOR",
-  "LOA",
+  "Transcript of Records",
+  "Leave of Absence",
   "Withdrawal",
 ];
 
@@ -208,6 +207,7 @@ export default function StudentProfile({ studentId, onBack }) {
   // Preview
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewCred, setPreviewCred] = useState(null);
+  const [zoom, setZoom] = useState(100);
 
   // Edit
   const [showEditModal, setShowEditModal] = useState(false);
@@ -972,6 +972,7 @@ const handleDocumentUpload = async (e) => {
       preview_error: previewError,
     });
 
+    setZoom(100);
     setShowPreviewModal(true);
 
     logActivity({
@@ -1278,28 +1279,83 @@ const handleDocumentUpload = async (e) => {
                     }}
                   />
                 ) : (
-                  <img
-                    src={previewCred.file_url}
-                    alt={previewCred.name}
-                    onError={() =>
-                      setPreviewCred((prev) =>
-                        prev
-                          ? {
-                              ...prev,
-                              file_url: null,
-                              preview_error: `The file link did not load (${
-                                prev.file_path || "unknown path"
-                              }).`,
-                            }
-                          : prev
-                      )
-                    }
-                    style={{
-                      maxWidth: "100%",
-                      maxHeight: "500px",
-                      objectFit: "contain",
-                    }}
-                  />
+                                                      <>
+                    <div
+                      style={{
+                        maxHeight: "400px",
+                        overflow: "auto",
+                        textAlign: "center",
+                      }}
+                    >
+                      <img
+                        src={previewCred.file_url}
+                        alt={previewCred.name}
+                        onError={() =>
+                          setPreviewCred((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  file_url: null,
+                                  preview_error: `The file link did not load (${
+                                    prev.file_path || "unknown path"
+                                  }).`,
+                                }
+                              : prev
+                          )
+                        }
+                        style={{
+                          display: "block",
+                          margin: "0 auto",
+                          height: `${(375 * zoom) / 100}px`,
+                          width: "auto",
+                          maxWidth: "none",
+                        }}
+                      />
+                    </div>
+
+                    <div className="zoom-bar">
+                      <button
+                        type="button"
+                        className="zoom-btn"
+                        onClick={() => setZoom((z) => Math.max(50, z - 25))}
+                        aria-label="Zoom out"
+                      >
+                        −
+                      </button>
+
+                      <input
+                        type="range"
+                        className="zoom-slider"
+                        min="50"
+                        max="300"
+                        step="5"
+                        value={zoom}
+                        onChange={(e) => setZoom(Number(e.target.value))}
+                        style={{
+                          "--zoom-pct": `${((zoom - 50) / 250) * 100}%`,
+                        }}
+                      />
+
+                      <button
+                        type="button"
+                        className="zoom-btn"
+                        onClick={() => setZoom((z) => Math.min(300, z + 25))}
+                        aria-label="Zoom in"
+                      >
+                        +
+                      </button>
+
+                      <span className="zoom-value">{zoom}%</span>
+
+                      <button
+                        type="button"
+                        className="zoom-reset"
+                        onClick={() => setZoom(100)}
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </>
                 )
               ) : (
                 <div className="text-center">

@@ -95,9 +95,10 @@ export default function OCRConfirmation({
     const loadDocumentTypes = async () => {
       try {
         const { data, error } = await supabase
-          .from("tbl_documents")
-          .select("document_id, document_name")
-          .order("document_name");
+  .from("tbl_documents")
+  .select("document_id, document_name")
+  .eq("is_enrollment_requirement", true)
+  .order("document_name");
 
         if (cancelled) return;
 
@@ -289,25 +290,27 @@ const handleStudentNameBlur = async (
         return;
       }
 
-      const firstName = nameParts[0];
-      const lastName = nameParts[nameParts.length - 1];
-      const middleName = nameParts
-        .slice(1, -1)
-        .join(" ");
+      const lastWord = nameParts[nameParts.length - 1];
 
-      let query = supabase
+      const { data: rows, error } = await supabase
         .from("tbl_student")
         .select(
           "student_id, first_name, middle_name, last_name"
         )
-        .ilike("first_name", firstName)
-        .ilike("last_name", lastName);
+        .ilike("last_name", `%${lastWord}%`)
+        .limit(100);
 
-      if (middleName) {
-        query = query.ilike("middle_name", middleName);
-      }
+      // Compare the complete name regardless of how it is split in the table.
+      const target = normalizeName(searchName);
 
-      const { data, error } = await query.limit(2);
+      const data = (rows || []).filter(
+        (s) =>
+          normalizeName(
+            [s.first_name, s.middle_name, s.last_name]
+              .filter(Boolean)
+              .join(" ")
+          ) === target
+      );
 
       if (error) {
         console.error(
@@ -595,7 +598,7 @@ const handleStudentNameBlur = async (
                       "Name edited. Leave this field to verify the student record."
                     );
                   }}
-                  onBlur={handleStudentNameBlur}
+                  onBlur={() => handleStudentNameBlur(editedStudentName)}
                   placeholder="Enter student name"
                   disabled={saving}
                   autoComplete="off"

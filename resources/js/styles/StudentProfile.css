@@ -207,7 +207,7 @@
 }
 
 .preview-modal-body {
-  @apply px-8 py-8 bg-gray-50 min-h-[400px] flex items-center justify-center;
+  @apply px-8 py-8 bg-gray-50 min-h-[400px] flex flex-col justify-center;
 }
 
 .preview-modal-footer {
@@ -318,4 +318,107 @@
 
   overflow: hidden !important;
   box-sizing: border-box !important;
+}
+
+/* ── Zoom Toolbar ── */
+.zoom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: fit-content;
+  margin: 16px auto 0;
+  padding: 8px 18px;
+  background: #ffffff;
+  border: 1px solid #f3f4f6;
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgba(26, 26, 110, 0.08);
+}
+
+.zoom-btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: rgba(26, 26, 110, 0.08);
+  color: #1a1a6e;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.zoom-btn:hover {
+  background: #e6a817;
+  color: #ffffff;
+}
+
+.zoom-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 200px;
+  height: 6px;
+  border-radius: 9999px;
+  outline: none;
+  cursor: pointer;
+  background: linear-gradient(
+    to right,
+    #e6a817 0%,
+    #e6a817 var(--zoom-pct, 20%),
+    #e5e7eb var(--zoom-pct, 20%),
+    #e5e7eb 100%
+  );
+}
+
+.zoom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #1a1a6e;
+  border: 3px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.zoom-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #1a1a6e;
+  border: 3px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.zoom-slider::-moz-range-track {
+  background: transparent;
+}
+
+.zoom-value {
+  min-width: 46px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: #1a1a6e;
+}
+
+.zoom-reset {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #e6a817;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.zoom-reset:hover {
+  background: rgba(230, 168, 23, 0.12);
 }
