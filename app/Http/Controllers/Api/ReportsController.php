@@ -24,6 +24,35 @@ class ReportsController extends Controller
         ]);
     }
 
+    /**
+     * GET /api/reports/archived-logs?year=2026
+     * ADDED: returns rows from tbl_system_activity for the selected year.
+     */
+    public function archivedLogs(Request $request)
+    {
+        $year = (int) $request->query('year', now()->year);
+
+        $logs = DB::table('tbl_system_activity as a')
+            ->leftJoin('tbl_staff as s', 's.staff_id', '=', 'a.staff_id')
+            ->selectRaw('a.activity_id, a.activity_type, a.activity_description, a.date_time, a.staff_id, COALESCE(s.name, s.username) AS staff_name')
+            ->whereRaw('EXTRACT(YEAR FROM a.date_time) = ?', [$year])
+            ->where(function ($q) { // CHANGED: hide Admin activity
+                $q->whereNull('s.user_role')
+                  ->orWhere('s.user_role', '!=', 'Admin');
+            })
+            ->orderByDesc('a.date_time')
+            ->get()
+            ->map(fn($row) => [
+                'id'      => $row->activity_id,
+                'message' => $row->activity_description ?: $row->activity_type,
+                'user'    => $row->staff_name ?? ('Staff #' . $row->staff_id),
+                'date'    => $row->date_time,
+            ])
+            ->values();
+
+        return response()->json($logs);
+    }
+
     // ── STAT CARDS ────────────────────────────────────────────────────
 
     private function getStats(): array

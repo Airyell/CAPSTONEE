@@ -71,6 +71,11 @@
   color: rgba(255,255,255,0.6);
 }
 
+.sr-date-input option {
+  background-color: #161b27;
+  color: #ffffff;
+}
+
 /* ── Bar Chart SVG ── */
 .sr-bar-chart-svg {
   @apply w-full overflow-visible;
@@ -130,4 +135,47 @@
 /* ── Most Requested Credentials Bar Chart ── */
 .sr-req-chart-svg {
   @apply w-full overflow-visible;
+}
+
+.sr-stats-grid.sr-stats-grid-4 {
+  @apply grid-cols-4;
+}
+
+.sr-archived-card {
+  @apply cursor-pointer transition-colors;
+}
+
+.sr-archived-card:hover {
+  border-color: rgba(230,168,23,0.4);
+}
+
+.sr-archived-card:focus-visible {
+  @apply outline-none;
+  border-color: #e6a817;
+}
+
+/* ── Archived Logs Panel ── */
+.sr-logs-list {
+  @apply overflow-y-auto;
+  max-height: 320px;
+}
+
+.sr-log-row {
+  @apply flex justify-between gap-4 py-2 text-[13px];
+  color: rgba(255,255,255,0.7);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.sr-log-date {
+  @apply whitespace-nowrap;
+  color: rgba(255,255,255,0.35);
+}
+
+.sr-logs-msg {
+  @apply text-[13px];
+  color: rgba(255,255,255,0.3);
+}
+
+.sr-logs-msg-error {
+  color: #f87171;
 }

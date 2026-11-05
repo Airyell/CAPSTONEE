@@ -64,6 +64,7 @@ Route::middleware(['auth.staff', 'role:Registrar Staff'])->group(function () {
 Route::middleware(['auth.staff', 'role:Admin'])->group(function () {
 
     Route::get('reports', [ReportsController::class, 'index']);
+    Route::get('reports/archived-logs', [ReportsController::class, 'archivedLogs']); // ADDED
 
     Route::apiResource('staff', StaffController::class)->only([
         'index', 'store', 'update', 'destroy',
