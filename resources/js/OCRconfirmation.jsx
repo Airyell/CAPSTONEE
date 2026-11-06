@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "./supabaseClient";
@@ -12,6 +11,43 @@ const normalizeName = (name) =>
     .trim()
     .replace(/\s+/g, " ")
     .toLowerCase();
+
+// Statuses that should NOT count as an existing document.
+// Example: ["Rejected", "Deleted"] lets the student re-upload a rejected file.
+// Leave empty to treat every saved record as a duplicate.
+const IGNORED_DUPLICATE_STATUSES = [];
+
+// Look for an already-saved document of the same type for the same student.
+// Returns the existing record, or null if none exists.
+const findExistingDocument = async (studentId, documentId) => {
+  let query = supabase
+    .from("tbl_student_documents")
+    .select(
+      "student_documents_id, document_name, date_uploaded, status"
+    )
+    .eq("student_id", Number(studentId))
+    .eq("document_id", Number(documentId));
+
+  if (IGNORED_DUPLICATE_STATUSES.length) {
+    query = query.not(
+      "status",
+      "in",
+      `(${IGNORED_DUPLICATE_STATUSES.map((s) => `"${s}"`).join(",")})`
+    );
+  }
+
+  const { data, error } = await query.limit(1);
+
+  if (error) throw error;
+
+  return data?.[0] || null;
+};
+
+const formatDate = (value) => {
+  if (!value) return "";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString();
+};
 
 export default function OCRConfirmation({
   ocrResult = null,
@@ -36,6 +72,11 @@ export default function OCRConfirmation({
 
   const [saving, setSaving] = useState(false);
   const [previewError, setPreviewError] = useState(false);
+
+  // Duplicate check state.
+  const [duplicateDoc, setDuplicateDoc] = useState(null);
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+  const [duplicateCheckError, setDuplicateCheckError] = useState("");
 
   // Use the scanned image returned by Flask when fileUrl is empty.
   const previewUrl =
@@ -95,10 +136,10 @@ export default function OCRConfirmation({
     const loadDocumentTypes = async () => {
       try {
         const { data, error } = await supabase
-  .from("tbl_documents")
-  .select("document_id, document_name")
-  .eq("is_enrollment_requirement", true)
-  .order("document_name");
+          .from("tbl_documents")
+          .select("document_id, document_name")
+          .eq("is_enrollment_requirement", true)
+          .order("document_name");
 
         if (cancelled) return;
 
@@ -205,12 +246,11 @@ export default function OCRConfirmation({
     setSuggested(false);
   }, [docs, ocrResult, detectedDocType]);
 
-
-// 3. Initialize the editable student name whenever a new scan loads.
-useEffect(() => {
+  // 3. Initialize the editable student name whenever a new scan loads.
+  useEffect(() => {
     const initialName = studentId
-        ? studentName
-        : ocrFullName;
+      ? studentName
+      : ocrFullName;
 
     setEditedStudentName(initialName);
     setPickedStudent(null);
@@ -219,15 +259,14 @@ useEffect(() => {
     // Automatically search the database using the OCR name.
     // No need to edit or blur the Student Name field.
     if (!studentId && initialName.trim()) {
-        handleStudentNameBlur(initialName);
+      handleStudentNameBlur(initialName);
     }
-}, [ocrResult, studentId, studentName]);
+  }, [ocrResult, studentId, studentName]);
 
-
-// 4. Find the student record using the provided name.
-const handleStudentNameBlur = async (
+  // 4. Find the student record using the provided name.
+  const handleStudentNameBlur = async (
     nameToCheck = editedStudentName
-) => {
+  ) => {
     const searchName = nameToCheck.trim();
 
     if (!searchName) {
@@ -300,18 +339,6 @@ const handleStudentNameBlur = async (
         .ilike("last_name", `%${lastWord}%`)
         .limit(100);
 
-      // Compare the complete name regardless of how it is split in the table.
-      const target = normalizeName(searchName);
-
-      const data = (rows || []).filter(
-        (s) =>
-          normalizeName(
-            [s.first_name, s.middle_name, s.last_name]
-              .filter(Boolean)
-              .join(" ")
-          ) === target
-      );
-
       if (error) {
         console.error(
           "Student name lookup failed:",
@@ -324,14 +351,26 @@ const handleStudentNameBlur = async (
         return;
       }
 
+      // Compare the complete name regardless of how it is split in the table.
+      const target = normalizeName(searchName);
+
+      const data = (rows || []).filter(
+        (s) =>
+          normalizeName(
+            [s.first_name, s.middle_name, s.last_name]
+              .filter(Boolean)
+              .join(" ")
+          ) === target
+      );
+
       // Only accept one unambiguous database match.
-      if (data?.length === 1) {
+      if (data.length === 1) {
         setPickedStudent(data[0]);
 
         setStudentLookupStatus(
           "Student record found. Student ID automatically loaded."
         );
-      } else if (data?.length > 1) {
+      } else if (data.length > 1) {
         setStudentLookupStatus(
           "Multiple student records found. Please check the complete name."
         );
@@ -357,6 +396,42 @@ const handleStudentNameBlur = async (
     studentId || pickedStudent?.student_id || "";
 
   const finalStudentName = editedStudentName.trim();
+
+  // 5b. Check for an existing saved document whenever the student
+  // or the selected document type changes.
+  useEffect(() => {
+    let cancelled = false;
+
+    setDuplicateDoc(null);
+    setDuplicateCheckError("");
+
+    if (!finalStudentId || !documentId) {
+      setCheckingDuplicate(false);
+      return;
+    }
+
+    setCheckingDuplicate(true);
+
+    findExistingDocument(finalStudentId, documentId)
+      .then((existing) => {
+        if (cancelled) return;
+        setDuplicateDoc(existing);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error("Duplicate document check failed:", error);
+        setDuplicateCheckError(
+          "Could not check for existing documents. Please try again."
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingDuplicate(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [finalStudentId, documentId]);
 
   // 6. Save the confirmed document.
   const handleSave = async () => {
@@ -399,6 +474,26 @@ const handleStudentNameBlur = async (
         throw new Error(
           "The save function is not available."
         );
+      }
+
+      // Re-check right before saving, in case a record was added
+      // after the preview check ran (for example, from another scanner).
+      const existing = await findExistingDocument(
+        finalStudentId,
+        documentId
+      );
+
+      if (existing) {
+        setDuplicateDoc(existing);
+
+        const when = formatDate(existing.date_uploaded);
+
+        alert(
+          `${doc.document_name} is already saved for this student` +
+            (when ? ` (uploaded ${when})` : "") +
+            ". Duplicate documents are not allowed."
+        );
+        return;
       }
 
       await onSave({
@@ -575,6 +670,43 @@ const handleStudentNameBlur = async (
                       %
                     </p>
                   )}
+
+                {/* DUPLICATE WARNING */}
+                {checkingDuplicate && (
+                  <p className="ocr-field-hint">
+                    Checking for existing documents...
+                  </p>
+                )}
+
+                {!checkingDuplicate && duplicateDoc && (
+                  <p
+                    className="ocr-field-hint"
+                    role="alert"
+                    style={{ color: "#b42318", fontWeight: 600 }}
+                  >
+                    This document type is already saved for this
+                    student
+                    {formatDate(duplicateDoc.date_uploaded)
+                      ? ` (uploaded ${formatDate(
+                          duplicateDoc.date_uploaded
+                        )})`
+                      : ""}
+                    {duplicateDoc.status
+                      ? `, status: ${duplicateDoc.status}`
+                      : ""}
+                    .
+                  </p>
+                )}
+
+                {!checkingDuplicate && duplicateCheckError && (
+                  <p
+                    className="ocr-field-hint"
+                    role="alert"
+                    style={{ color: "#b42318" }}
+                  >
+                    {duplicateCheckError}
+                  </p>
+                )}
               </div>
 
               {/* EDITABLE STUDENT NAME */}
@@ -649,6 +781,8 @@ const handleStudentNameBlur = async (
                 !finalStudentName ||
                 !previewUrl ||
                 saving ||
+                checkingDuplicate ||
+                !!duplicateDoc ||
                 !!docsError
               }
             >

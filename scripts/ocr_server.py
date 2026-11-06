@@ -73,12 +73,16 @@ except Exception:
 
 
 try:
-    OCR_MAX_SIZE = max(
-        500,
-        int(os.environ.get("OCR_MAX_SIZE", "2200"))
-    )
+    # 1800-2000 is a useful speed/legibility balance for scanned records.
+    OCR_MAX_SIZE = max(500, int(os.environ.get("OCR_MAX_SIZE", "2000")))
 except Exception:
-    OCR_MAX_SIZE = 2200
+    OCR_MAX_SIZE = 2000
+
+# Expensive image operations are opt-in. Enable only when a scan is poor.
+OCR_DESKEW = os.environ.get("OCR_DESKEW", "0") == "1"
+OCR_ENABLE_ENHANCED_FALLBACK = os.environ.get("OCR_ENABLE_ENHANCED_FALLBACK", "0") == "1"
+OCR_ENABLE_UPPER_FALLBACK = os.environ.get("OCR_ENABLE_UPPER_FALLBACK", "0") == "1"
+OCR_VERBOSE = os.environ.get("OCR_VERBOSE", "0") == "1"
 
 
 OCR_TEXTLINE_ORIENTATION = (
@@ -460,9 +464,8 @@ def deskew_document(image):
 
 def prepare_image(image):
     image = resize_document(image)
-
-    image = deskew_document(image)
-
+    if OCR_DESKEW:
+        image = deskew_document(image)
     return image
 
 
@@ -507,10 +510,8 @@ def parse_ocr_result(result):
         )
         return items
 
-    print(
-        "[OCR PARSER] Incoming result type:",
-        type(result).__name__
-    )
+    if OCR_VERBOSE:
+        print("[OCR PARSER] Incoming result type:", type(result).__name__)
 
     json_result = None
 
@@ -660,13 +661,8 @@ def parse_ocr_result(result):
     except Exception:
         boxes = []
 
-    print(
-        f"[OCR PARSER] Arrays: "
-        f"texts={len(texts)}, "
-        f"scores={len(scores)}, "
-        f"polys={len(polygons)}, "
-        f"boxes={len(boxes)}"
-    )
+    if OCR_VERBOSE:
+        print(f"[OCR PARSER] Arrays: texts={len(texts)}, scores={len(scores)}, polys={len(polygons)}, boxes={len(boxes)}")
 
     for i, raw_text in enumerate(texts):
         text = clean_text(raw_text)
@@ -717,18 +713,10 @@ def parse_ocr_result(result):
             }
         )
 
-    print(
-        f"[OCR PARSER] Parsed {len(items)} usable text detections."
-    )
-
-    if items:
-        print(
-            "[OCR PARSER] First detections:",
-            " | ".join(
-                item["text"]
-                for item in items[:12]
-            )
-        )
+    if OCR_VERBOSE:
+        print(f"[OCR PARSER] Parsed {len(items)} usable text detections.")
+        if items:
+            print("[OCR PARSER] First detections:", " | ".join(item["text"] for item in items[:12]))
 
     return items
 
@@ -964,22 +952,12 @@ def run_ocr(image):
         return []
 
     try:
-        print(
-            "[OCR] Running PaddleOCR prediction..."
-        )
-
+        prediction_start = time.perf_counter()
         with ocr_lock:
             result = ocr_engine.predict(image)
-
-        print(
-            "[OCR] PaddleOCR prediction completed."
-        )
-
         items = parse_ocr_result(result)
-
-        print(
-            f"[OCR] Parsed {len(items)} text detections."
-        )
+        if OCR_VERBOSE:
+            print(f"[OCR] Prediction + parsing: {time.perf_counter() - prediction_start:.3f}s; detections={len(items)}")
 
         return items
 
@@ -3024,9 +3002,9 @@ def is_birth_certificate_document(
 # ============================================================
 
 def extract_document(image_path):
-    start = time.time()
+    start = time.perf_counter()
 
-    image = cv2.imread(image_path)
+    image = cv2.imread(image_path, cv2.IMREAD_COLOR)
 
     if image is None:
         raise ValueError(
@@ -3055,7 +3033,7 @@ def extract_document(image_path):
     # INITIAL FULL-PAGE OCR
     # --------------------------------------------------------
 
-    ocr_start = time.time()
+    ocr_start = time.perf_counter()
 
     items = run_ocr(image)
 
@@ -3085,7 +3063,7 @@ def extract_document(image_path):
     )
 
     ocr_seconds = (
-        time.time() - ocr_start
+        time.perf_counter() - ocr_start
     )
 
     upper_ocr_seconds = 0.0
@@ -3111,7 +3089,7 @@ def extract_document(image_path):
     # INITIAL NAME EXTRACTION
     # --------------------------------------------------------
 
-    name_start = time.time()
+    name_start = time.perf_counter()
 
     owner_name = extract_owner_name(
         image,
@@ -3152,13 +3130,12 @@ def extract_document(image_path):
     # ENHANCED OCR FALLBACK
     # --------------------------------------------------------
 
-    if not (
+    if OCR_ENABLE_ENHANCED_FALLBACK and not (
         owner_name["first_name"]
         and owner_name["last_name"]
     ):
-        print(
-            "\n[ENHANCED OCR] Running enhanced image pass..."
-        )
+        if OCR_VERBOSE:
+            print("\n[ENHANCED OCR] Running enhanced image pass...")
 
         enhanced_start = time.time()
 
@@ -3243,7 +3220,7 @@ def extract_document(image_path):
                         name_source = "enhanced_generic_label"
 
         enhanced_ocr_seconds = (
-            time.time() - enhanced_start
+            time.perf_counter() - enhanced_start
         )
 
         print(
@@ -3260,7 +3237,8 @@ def extract_document(image_path):
     # --------------------------------------------------------
 
     if (
-        not strict_child_extraction
+        OCR_ENABLE_UPPER_FALLBACK
+        and not strict_child_extraction
         and not (
             owner_name["first_name"]
             and owner_name["last_name"]
@@ -3273,7 +3251,7 @@ def extract_document(image_path):
         )
 
         upper_ocr_seconds = (
-            time.time() - upper_start
+            time.perf_counter() - upper_start
         )
 
         if upper_items:
@@ -3324,7 +3302,7 @@ def extract_document(image_path):
         name_source = "none"
 
     name_seconds = (
-        time.time() - name_start
+        time.perf_counter() - name_start
     )
 
     # --------------------------------------------------------
@@ -3339,13 +3317,9 @@ def extract_document(image_path):
     print("[OCR DETECTIONS]")
     print("================================================")
 
-    for index, item in enumerate(ordered_items):
-        print(
-            f"{index:03d} | "
-            f"'{item.get('text', '')}' | "
-            f"score={item.get('score', 0):.3f} | "
-            f"box={item.get('box')}"
-        )
+    if OCR_VERBOSE:
+        for index, item in enumerate(ordered_items):
+            print(f"{index:03d} | '{item.get('text', '')}' | score={item.get('score', 0):.3f} | box={item.get('box')}")
 
     raw_text = " ".join(
         item.get("text", "")
@@ -3358,16 +3332,10 @@ def extract_document(image_path):
         f"raw_text_chars={len(raw_text)}"
     )
 
-    if raw_text:
-        print(
-            "[OCR RAW TEXT]",
-            raw_text[:2500]
-        )
-    else:
-        print(
-            "[OCR WARNING] PaddleOCR produced no parsed text. "
-            "Check the [OCR PARSER] lines above."
-        )
+    if OCR_VERBOSE and raw_text:
+        print("[OCR RAW TEXT]", raw_text[:2500])
+    elif not raw_text:
+        print("[OCR WARNING] PaddleOCR produced no parsed text.")
 
     # Final document classification.
     document_classification = classify_document_type(
@@ -3377,7 +3345,7 @@ def extract_document(image_path):
     )
 
     total_seconds = (
-        time.time() - start
+        time.perf_counter() - start
     )
 
     # --------------------------------------------------------
@@ -3635,9 +3603,9 @@ if __name__ == "__main__":
         "Fields : First / Middle / Last"
     )
 
-    print(
-        "Mode   : Strict child extraction for birth certificates"
-    )
+    print("Mode   : Strict child extraction for birth certificates")
+    print(f"Fast   : max_size={OCR_MAX_SIZE}, cpu_threads={OCR_CPU_THREADS}, mkldnn={OCR_ENABLE_MKLDNN}")
+    print(f"Fallbacks: enhanced={OCR_ENABLE_ENHANCED_FALLBACK}, upper={OCR_ENABLE_UPPER_FALLBACK}, deskew={OCR_DESKEW}")
 
     print("================================================")
     print("")
