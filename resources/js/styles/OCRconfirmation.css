@@ -951,4 +951,14 @@
     font-size: 10px;
   }
 
+  
+/* Hide ONLY the arrow in Student Name */
+.ocr-student-name-input {
+    background-image: none !important;
+    appearance: none !important;
+    -webkit-appearance: none !important;
+}
+
+
+
 }

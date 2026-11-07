@@ -23,7 +23,11 @@ function deriveRemarks(docs) {
 }
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 
@@ -37,6 +41,12 @@ function isDocOverdue(doc) {
   if (!doc.dueDate) return false;
   if (doc.status === "Completed" || doc.status === "Rejected") return false;
   return doc.dueDate < todayStr();
+}
+
+function isDocDueToday(doc) {
+  if (!doc.dueDate) return false;
+  if (doc.status === "Completed" || doc.status === "Rejected") return false;
+  return String(doc.dueDate).slice(0, 10) === todayStr();
 }
 
 function earliestDueDate(docs) {
@@ -82,9 +92,21 @@ function formatDate(value) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
+function parseTimestamp(value) {
+  if (!value) return null;
+  const s = String(value).replace(" ", "T");
+  const hasZone = /([zZ]|[+-]\d{2}(:?\d{2})?)$/.test(s);
+  return new Date(hasZone ? s : s + "Z");
+}
+
 function formatDateTime(value) {
-  if (!value) return "—";
-  return new Date(value).toLocaleString();
+  const d = parseTimestamp(value);
+  if (!d) return "—";
+  return d.toLocaleString("en-PH", {
+    timeZone: "Asia/Manila",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 function formatRequestId(id) {
@@ -96,6 +118,15 @@ function studentFullName(student) {
   if (!student) return "Unknown Student";
   const { first_name, middle_name, last_name } = student;
   return [first_name, middle_name, last_name].filter(Boolean).join(" ");
+}
+
+const yearLevelMap = {
+  1: "1st Year", 2: "2nd Year", 3: "3rd Year", 4: "4th Year", 5: "5th Year",
+};
+
+function yearLevelLabel(value) {
+  if (value === null || value === undefined || value === "") return null;
+  return yearLevelMap[value] || String(value);
 }
 
 function yesNo(value) {
@@ -125,6 +156,44 @@ function DetailRow({ label, value }) {
   );
 }
 
+const formLabel = "block text-xs font-bold text-[#0A2342] uppercase tracking-widest mb-1.5";
+
+function FormSection({ title, children }) {
+  return (
+    <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 p-6">
+      {title && <p className="mb-4 text-sm font-black text-[#0A2342]">{title}</p>}
+      {children}
+    </div>
+  );
+}
+
+function FormField({ label, value, className = "" }) {
+  return (
+    <div className={className}>
+      <label className={formLabel}>{label}</label>
+      <div className="min-h-[46px] w-full whitespace-pre-wrap rounded-lg border border-gray-300 bg-white p-3 text-sm text-gray-800">
+        {value || "—"}
+      </div>
+    </div>
+  );
+}
+
+function YesNoField({ label, value, children }) {
+  return (
+    <FormSection title={label}>
+      <div className="flex items-center gap-6">
+        {[["Yes", true], ["No", false]].map(([text, val]) => (
+          <label key={text} className="flex items-center gap-2 text-sm font-semibold text-[#0A2342]">
+            <input type="checkbox" checked={value === val} disabled readOnly className="h-4 w-4 accent-[#D4A017]" />
+            {text}
+          </label>
+        ))}
+      </div>
+      {children && <div className="mt-4">{children}</div>}
+    </FormSection>
+  );
+}
+
 function RequestDetailsModal({ request, onClose, onSetDueDate, onCancel, cancelling }) {
   // ADDED: rejection reason field shown after clicking "Reject Request"
   const [showReason, setShowReason] = useState(false);
@@ -147,11 +216,11 @@ function RequestDetailsModal({ request, onClose, onSetDueDate, onCancel, cancell
       onClick={onClose}
     >
       <div
-        className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-xl"
+        className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-xl [scrollbar-gutter:stable_both-edges]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-gray-100 px-6 py-4">
+          <div className="flex items-start justify-between border-b border-gray-100 px-8 py-6">
           <div>
             <h3 className="text-lg font-semibold text-[#1f1d70]">{r.displayId}</h3>
             <p className="text-sm text-gray-500">{r.studentName} · ID {r.studentId}</p>
@@ -169,7 +238,7 @@ function RequestDetailsModal({ request, onClose, onSetDueDate, onCancel, cancell
         </div>
 
         {/* Body */}
-        <div className="px-6 py-4">
+        <div className="px-8 py-6">
           {/* Requested documents */}
           <div className="mb-4">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
@@ -217,43 +286,83 @@ function RequestDetailsModal({ request, onClose, onSetDueDate, onCancel, cancell
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-x-6 divide-y divide-gray-50 sm:grid-cols-2 sm:divide-y-0">
-            <DetailRow label="Request Date" value={formatDateTime(r.requestDate)} />
-            <DetailRow label="Contact Number" value={r.contactNumber} />
-            <DetailRow label="Purpose" value={r.purpose} />
-            <DetailRow label="Remarks" value={r.remarks} />
+          {/* ── Student's submitted form (read-only) ── */}
+<div className="mb-5 mt-8">
+  <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-[#D4A017]">
+    Submitted · {formatDateTime(r.requestDate)}
+  </p>
+  <h4 className="text-lg font-black text-[#1f1d70]">Request Form</h4>
+</div>
 
-            <DetailRow label="Graduate" value={yesNo(r.isGraduate)} />
-            <DetailRow label="Graduate Year" value={r.graduateYear} />
-            <DetailRow label="Last Semester Attended" value={r.lastSemester} />
-            <DetailRow
-              label="Last School Year"
-              value={r.lastSyStart && r.lastSyEnd ? `${r.lastSyStart} – ${r.lastSyEnd}` : null}
-            />
+<FormSection>
+  <FormField label="Contact Number" value={r.contactNumber} />
+</FormSection>
 
-            <DetailRow label="Requested Before" value={yesNo(r.requestedBefore)} />
-            <DetailRow label="Previous Credential" value={r.previousCredential} />
-            <DetailRow label="Previous Request Date" value={formatDate(r.previousRequestDate)} />
-            <DetailRow label="Cleared" value={yesNo(r.isCleared)} />
+<YesNoField label="Are you a graduate?" value={r.isGraduate}>
+  {r.isGraduate === true && (
+    <FormField label="Year of Graduation" value={r.graduateYear} />
+  )}
+  {r.isGraduate === false && (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <FormField label="Last Semester" value={r.lastSemester} />
+      <FormField label="S.Y. Start" value={r.lastSyStart} />
+      <FormField label="S.Y. End" value={r.lastSyEnd} />
+    </div>
+  )}
+</YesNoField>
 
-            <DetailRow
-              label="Agency"
-              value={/^other/i.test(r.agency || "") ? (r.agencyOther || r.agency) : r.agency}
-            />
-            <DetailRow
-              label="Certification Type"
-              value={/^other/i.test(r.certificationType || "") ? (r.certificationOther || r.certificationType) : r.certificationType}
-            />
-            <DetailRow label="Subject Semester" value={r.subjectSemester} />
-            <DetailRow
-              label="Subject School Year"
-              value={r.subjectSyStart && r.subjectSyEnd ? `${r.subjectSyStart} – ${r.subjectSyEnd}` : null}
-            />
-          </div>
+<YesNoField label="Have you previously requested credentials?" value={r.requestedBefore}>
+  {r.requestedBefore === true && (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <FormField label="Credential" value={r.previousCredential} />
+      <FormField label="Date of Request" value={r.previousRequestDate ? formatDate(r.previousRequestDate) : null} />
+    </div>
+  )}
+</YesNoField>
+
+<YesNoField label="Cleared?" value={r.isCleared} />
+
+
+<div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+  <FormField label="Student ID" value={r.studentId} />
+  <FormField label="Full Name" value={r.studentName} />
+  <FormField label="Email Address" value={r.email} />
+  <FormField label="Course" value={r.course} />
+  <FormField label="Year Level" value={r.yearLevel} />
+  <FormField
+    label="Request Type"
+    value={r.docs.map(d => d.name).join(", ")}
+    className="sm:col-span-2"
+  />
+
+  {r.agency && (
+    <FormField
+      label="Requesting Agency"
+      value={r.agency === "Other" ? (r.agencyOther || "Other") : r.agency}
+      className="sm:col-span-2"
+    />
+  )}
+  {r.certificationType && (
+    <FormField
+      label="Certification Type"
+      value={r.certificationType === "Others" ? (r.certificationOther || "Others") : r.certificationType}
+      className="sm:col-span-2"
+    />
+  )}
+  {(r.subjectSemester || r.subjectSyStart || r.subjectSyEnd) && (
+    <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-3">
+      <FormField label="Semester" value={r.subjectSemester} />
+      <FormField label="S.Y. Start" value={r.subjectSyStart} />
+      <FormField label="S.Y. End" value={r.subjectSyEnd} />
+    </div>
+  )}
+
+  <FormField label="Purpose of Request" value={r.purpose} className="sm:col-span-2" />
+</div>
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-100 px-6 py-4">
+        <div className="border-t border-gray-100 px-8 py-5">
           {/* ADDED: rejection reason field */}
           {r.status === "Pending" && showReason && (
             <div className="mb-3">
@@ -356,7 +465,15 @@ export default function Requests() {
         subject_semester,
         subject_sy_start,
         subject_sy_end,
-        student:tbl_student ( student_id, first_name, middle_name, last_name ),
+        student:tbl_student (
+          student_id,
+          first_name,
+          middle_name,
+          last_name,
+          email,
+          year_level,
+          program:tbl_program ( program_name )
+        ),
         documents:tbl_request_document (
           request_document_id,
           status,
@@ -442,11 +559,14 @@ export default function Requests() {
         displayId: formatRequestId(r.request_id),
         studentId: r.student?.student_id ?? r.student_id,
         studentName: studentFullName(r.student),
+        email: r.student?.email,
+        course: r.student?.program?.program_name,
+        yearLevel: yearLevelLabel(r.student?.year_level),
         docs,
         requestDate: r.date_request,
         remarks: deriveRemarks(docs),
         status: deriveStatus(docs),
-        dueToday: docs.some(isDocDue),
+        dueToday: docs.some(isDocDueToday),
         overdue: docs.some(isDocOverdue),
         earliestDueDate: earliestDueDate(docs),
 
@@ -511,6 +631,13 @@ export default function Requests() {
         .in("request_document_id", idsToComplete);
 
       if (updateError) {
+        // ADDED: record the failure in Audit Logs
+        logActivity({
+          type: "Update",
+          description: `Failed to complete request ${request?.displayId} (${request?.studentName}): ${updateError.message}`,
+          module: "Requests Module",
+          status: "failed",
+        });
         setError(updateError.message);
         setUpdatingId(null);
         return;
@@ -559,6 +686,13 @@ export default function Requests() {
         .in("request_document_id", idsToCancel);
 
       if (updateError) {
+        // ADDED: record the failure in Audit Logs
+        logActivity({
+          type: "Update",
+          description: `Failed to reject request ${request?.displayId} (${request?.studentName}): ${updateError.message}`,
+          module: "Requests Module",
+          status: "failed",
+        });
         setError(updateError.message);
         setUpdatingId(null);
         return;
@@ -599,6 +733,14 @@ export default function Requests() {
       .eq("request_document_id", requestDocumentId);
 
     if (updateError) {
+      // ADDED: record the failure in Audit Logs
+      const failedRequest = requests.find(r => r.id === requestId);
+      logActivity({
+        type: "Update",
+        description: `Failed to update due date for request ${failedRequest?.displayId}: ${updateError.message}`,
+        module: "Requests Module",
+        status: "failed",
+      });
       setError(updateError.message);
       return;
     }

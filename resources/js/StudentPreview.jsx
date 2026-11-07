@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 import { supabase } from "./supabaseClient";
 
@@ -48,9 +48,10 @@ const yearLevelMap = {
   1: "1st Year", 2: "2nd Year", 3: "3rd Year", 4: "4th Year", 5: "5th Year",
 };
 
-// ── Release date formatter (new) ─────────────────────────────────
-// due_date comes from tbl_request_document.due_date (a DATE column).
-// Only the YYYY-MM-DD part is used so timezones can't shift the day.
+// ADDED: USTP e-Clearance site (update this URL if the official address differs)
+const ECLEARANCE_URL = "https://clearance.ustp.edu.ph/";
+
+// ── Release date formatter ───────────────────────────────────────
 const formatReleaseDate = (d) => {
   if (!d) return "To be announced";
   const [y, m, day] = String(d).slice(0, 10).split("-").map(Number);
@@ -63,7 +64,7 @@ const formatReleaseDate = (d) => {
 };
 
 export default function StudentPreview({ onBack }) {
-  // ── Search state (backend-driven, unchanged) ─────────────────
+  // ── Search state ─────────────────────────────────────────────
   const [studentId, setStudentId] = useState("");
   const [requests,  setRequests]  = useState([]);
   const [showForm,  setShowForm]  = useState(false);
@@ -86,6 +87,9 @@ export default function StudentPreview({ onBack }) {
   });
   const [preErrors, setPreErrors] = useState({});
 
+  // ADDED: controls the "settle your clearance" pop up
+  const [showClearancePopup, setShowClearancePopup] = useState(false);
+
   // ── Main form state ──────────────────────────────────────────
   const [formStudentId, setFormStudentId] = useState("");
   const [fullName,      setFullName]      = useState("");
@@ -93,9 +97,8 @@ export default function StudentPreview({ onBack }) {
   const [course,        setCourse]        = useState("");
   const [yearLevel,     setYearLevel]     = useState("");
   const [purpose,       setPurpose]       = useState("");
-  // REMOVED: studentFound state (no more automatic lookup)
 
-  const [requestType, setRequestType] = useState(""); // CHANGED: no default request type
+  const [requestType, setRequestType] = useState("");
   const [cavChoice,   setCavChoice]   = useState("");
   const [cavOther,    setCavOther]    = useState("");
   const [certChoice,  setCertChoice]  = useState("");
@@ -104,11 +107,20 @@ export default function StudentPreview({ onBack }) {
   const [subjectSY1,  setSubjectSY1]  = useState("");
   const [subjectSY2,  setSubjectSY2]  = useState("");
 
-  // ── Validation errors for the main form ──────────────────────
   const [mainErrors, setMainErrors] = useState({});
-
   const [submitting, setSubmitting] = useState(false);
-  // REMOVED: fetchingStudent state (no more automatic lookup)
+
+    // Back-to-top button: only shows after scrolling down
+  const [showTopBtn, setShowTopBtn] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setShowTopBtn(window.scrollY > 300);
+    onScroll();
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
   // ── Style helpers (validation-aware) ─────────────────────────
   const inputClass = (hasError) =>
@@ -129,6 +141,13 @@ export default function StudentPreview({ onBack }) {
     setPreErrors(prev => ({ ...prev, [field]: false }));
   };
 
+  // ADDED: choosing "No" on Cleared opens the pop up; choosing "Yes" closes it
+  const handleClearedChange = (value) => {
+    const newValue = preForm.isCleared === value ? null : value;
+    handlePreFormChange("isCleared", newValue);
+    setShowClearancePopup(newValue === false);
+  };
+
   const validatePreForm = () => {
     const e = {};
     if (!preForm.contactNumber.trim()) e.contactNumber = true;
@@ -145,6 +164,11 @@ export default function StudentPreview({ onBack }) {
   };
 
   const handleProceed = () => {
+    // ADDED: not cleared → block proceeding and show the pop up again
+    if (preForm.isCleared === false) {
+      setShowClearancePopup(true);
+      return;
+    }
     const e = validatePreForm();
     if (Object.keys(e).length > 0) { setPreErrors(e); return; }
     setPreErrors({});
@@ -155,7 +179,7 @@ export default function StudentPreview({ onBack }) {
   const resetForm = () => {
     setFormStudentId(""); setFullName(""); setEmail("");
     setCourse(""); setYearLevel(""); setPurpose("");
-    setRequestType(""); // CHANGED: no default request type
+    setRequestType("");
     setCavChoice(""); setCavOther("");
     setCertChoice(""); setCertOther("");
     setSubjectSem(""); setSubjectSY1(""); setSubjectSY2("");
@@ -173,16 +197,13 @@ export default function StudentPreview({ onBack }) {
       isCleared: null,
     });
     setPreErrors({});
+    setShowClearancePopup(false); // ADDED
     setStep("pre");
   };
 
-  // REMOVED: fetchStudent (the automatic lookup that filled the form)
-
-  // ── Search requests (backend, unchanged) ─────────────────────
+  // ── Search requests ──────────────────────────────────────────
   const searchRequest = async () => {
     if (!studentId.trim()) return;
-    // Read straight from Supabase (same source the registrar's Requests page
-    // writes the release date to) so due_date is always included.
     const { data, error } = await supabase
       .from("tbl_request")
       .select(`
@@ -197,7 +218,7 @@ export default function StudentPreview({ onBack }) {
           rejection_reason,
           document:tbl_documents ( document_name )
         )
-      `) // CHANGED (reject): added rejection_reason
+      `)
       .eq("student_id", Number(studentId))
       .order("date_request", { ascending: false });
 
@@ -207,7 +228,6 @@ export default function StudentPreview({ onBack }) {
       return;
     }
 
-    // One card per requested document
     const rows = [];
     (data || []).forEach(r => {
       if (r.documents && r.documents.length > 0) {
@@ -219,7 +239,7 @@ export default function StudentPreview({ onBack }) {
             document_name: rd.document?.document_name ?? r.main_doc?.document_name ?? "Document",
             status: rd.status || "Pending",
             due_date: rd.due_date,
-            rejection_reason: rd.rejection_reason, // ADDED (reject)
+            rejection_reason: rd.rejection_reason,
           });
         });
       } else {
@@ -230,7 +250,7 @@ export default function StudentPreview({ onBack }) {
           document_name: r.main_doc?.document_name ?? "Document",
           status: "Pending",
           due_date: null,
-          rejection_reason: null, // ADDED (reject)
+          rejection_reason: null,
         });
       }
     });
@@ -245,7 +265,7 @@ export default function StudentPreview({ onBack }) {
     if (!email.trim()) e.email = true;
     if (!course.trim()) e.course = true;
     if (!yearLevel) e.yearLevel = true;
-    if (!requestType) e.requestType = true; // ADDED
+    if (!requestType) e.requestType = true;
     if (!purpose.trim()) e.purpose = true;
     if (requestType === "CAV Certification" && !cavChoice) e.cavChoice = true;
     if (requestType === "CAV Certification" && cavChoice === "Other" && !cavOther.trim()) e.cavOther = true;
@@ -264,12 +284,18 @@ export default function StudentPreview({ onBack }) {
 
   // ── Submit request ───────────────────────────────────────────
   const submitRequest = async () => {
+    // ADDED: safety net — never submit if the student is not cleared
+    if (preForm.isCleared !== true) {
+      setStep("pre");
+      setShowClearancePopup(true);
+      return;
+    }
+
     const e = validateMainForm();
     if (Object.keys(e).length > 0) { setMainErrors(e); return; }
     setMainErrors({});
 
     if (!formStudentId.trim()) return alert("Please enter a Student ID.");
-    // REMOVED: the "valid Student ID to auto-fill" check (no more lookup)
     if (!purpose.trim())       return alert("Please state the purpose of your request.");
 
     const docId = documentIdMap[requestType];
@@ -318,6 +344,7 @@ export default function StudentPreview({ onBack }) {
   const studentRequests = requests.filter(
     r => String(r.student_id) === String(studentId)
   );
+  const notCleared = preForm.isCleared === false; // ADDED
 
   // ── Render ────────────────────────────────────────────────────
   return (
@@ -327,37 +354,30 @@ export default function StudentPreview({ onBack }) {
       <style>{`
         /* Phones (below 640px) */
         @media (max-width: 639px) {
-          /* Page + card spacing */
           .min-h-screen.px-6.py-12 { padding: 1.5rem 1rem; }
           .rounded-2xl.p-8 { padding: 1.25rem; }
           .rounded-2xl.p-6 { padding: 1rem; }
           .rounded-2xl.p-5 { padding: 1rem; }
           .section-fix, .bg-gray-50.rounded-xl.p-5 { padding: 1rem; }
 
-          /* Title */
           h1.text-4xl { font-size: 1.75rem; line-height: 2.25rem; margin-bottom: 1.5rem; }
 
-          /* Stack the 3-column (Semester / S.Y. Start / S.Y. End) and 2-column pre-form grids */
           .grid.grid-cols-3,
           .grid.grid-cols-2 { grid-template-columns: 1fr; }
 
-          /* Search row and Student ID row: input on top, button/status below */
           .flex.gap-3 { flex-direction: column; }
           .flex.gap-3 > input { flex: none; width: 100%; }
           .flex.gap-3 > button { width: 100%; }
 
-          /* Request cards: stack name/date above the status badge */
           .flex.justify-between.items-center {
             flex-direction: column;
             align-items: flex-start;
             gap: 0.75rem;
           }
 
-          /* Full-width action buttons */
           .justify-end > button,
           button.mt-6 { width: 100%; }
 
-          /* Yes/No checkboxes wrap instead of overflowing */
           .flex.items-center.gap-6 { flex-wrap: wrap; gap: 1rem; }
         }
 
@@ -367,10 +387,59 @@ export default function StudentPreview({ onBack }) {
           h1.text-4xl { font-size: 2.25rem; }
         }
 
-        /* Prevent sideways scrolling on any device */
         html, body { overflow-x: hidden; }
         input, select, textarea { max-width: 100%; }
       `}</style>
+
+      {/* ── ADDED: CLEARANCE POP UP ── */}
+      {showClearancePopup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="clearance-title"
+        >
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-7 text-center">
+            <div className="mx-auto mb-4 w-14 h-14 rounded-full bg-red-100 flex items-center justify-center text-2xl">
+              ⚠️
+            </div>
+            <h3 id="clearance-title" className="text-xl font-black text-[#0A2342] mb-2 tracking-tight">
+              Clearance Required
+            </h3>
+            <p className="text-sm text-gray-600 mb-6">
+              You must settle your clearance in the USTP e-Clearance site before you can request a document.
+            </p>
+            <div className="flex flex-col gap-3">
+              <a
+                href={ECLEARANCE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-[#0A2342] hover:bg-[#081b34] text-white px-6 py-3 rounded-xl font-semibold text-sm transition"
+              >
+                Go to USTP e-Clearance
+              </a>
+              <button
+                onClick={() => setShowClearancePopup(false)}
+                className="border border-gray-300 text-[#0A2342] px-6 py-3 rounded-xl font-semibold text-sm hover:bg-gray-50 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+            {/* Back to top button (shows while the form is open and the page is scrolled) */}
+      {showForm && showTopBtn && (
+        <button
+          onClick={scrollToTop}
+          aria-label="Back to top"
+          title="Back to top"
+          className="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-[#D4A017] text-xl font-bold text-white shadow-lg transition hover:bg-[#b8891a] focus:outline-none focus:ring-2 focus:ring-[#0A2342] focus:ring-offset-2"
+        >
+          ↑
+        </button>
+      )}
 
       <div className="max-w-4xl mx-auto">
 
@@ -409,7 +478,7 @@ export default function StudentPreview({ onBack }) {
             </button>
           </div>
           <button
-            onClick={() => { resetForm(); setShowForm(!showForm); }} // CHANGED: clears the form every time it is opened or hidden
+            onClick={() => { resetForm(); setShowForm(!showForm); }}
             className="mt-4 text-[#D4A017] font-semibold text-sm hover:underline"
           >
             {showForm ? "— Hide Form" : "+ Submit Request"}
@@ -586,7 +655,7 @@ export default function StudentPreview({ onBack }) {
                   <input
                     type="checkbox"
                     checked={preForm.isCleared === true}
-                    onChange={() => handlePreFormChange("isCleared", preForm.isCleared === true ? null : true)}
+                    onChange={() => handleClearedChange(true)} // CHANGED
                     className="w-4 h-4 accent-[#D4A017]"
                   />
                   Yes
@@ -595,19 +664,36 @@ export default function StudentPreview({ onBack }) {
                   <input
                     type="checkbox"
                     checked={preForm.isCleared === false}
-                    onChange={() => handlePreFormChange("isCleared", preForm.isCleared === false ? null : false)}
+                    onChange={() => handleClearedChange(false)} // CHANGED: opens the pop up
                     className="w-4 h-4 accent-[#D4A017]"
                   />
                   No
                 </label>
               </div>
               <ErrMsg show={preErrors.isCleared} />
+
+              {/* ADDED: inline reminder that stays after the pop up is closed */}
+              {notCleared && (
+                <p className="text-xs text-red-600 font-semibold mt-3">
+                  You need to settle your clearance in the{" "}
+                  <a
+                    href={ECLEARANCE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    USTP e-Clearance site
+                  </a>{" "}
+                  before you can request a document.
+                </p>
+              )}
             </div>
 
             <div className="mt-6 flex justify-end">
               <button
                 onClick={handleProceed}
-                className="bg-[#0A2342] hover:bg-[#081b34] text-white px-8 py-3 rounded-xl font-semibold text-sm transition"
+                disabled={notCleared} // ADDED: cannot proceed while not cleared
+                className="bg-[#0A2342] hover:bg-[#081b34] text-white px-8 py-3 rounded-xl font-semibold text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Proceed to Request Form &rarr;
               </button>
@@ -628,7 +714,7 @@ export default function StudentPreview({ onBack }) {
 
             <div className="grid md:grid-cols-2 gap-5">
 
-              {/* Student ID (form) — no automatic lookup, no "Found" message */}
+              {/* Student ID (form) */}
               <div className="md:col-span-2">
                 <label className={labelClass}>Student ID <Req /></label>
                 <div className="flex gap-3">
@@ -645,20 +731,20 @@ export default function StudentPreview({ onBack }) {
                 <ErrMsg show={mainErrors.studentId} />
               </div>
 
-              {/* Full Name — typed in manually */}
+              {/* Full Name */}
               <div>
                 <label className={labelClass}>Full Name <Req /></label>
                 <input
                   className={inputClass(mainErrors.fullName)}
                   value={fullName}
                   placeholder="Enter your full name"
-                  autoComplete="off" // ADDED
+                  autoComplete="off"
                   onChange={e => { setFullName(e.target.value); setMainErrors(p => ({ ...p, fullName: false })); }}
                 />
                 <ErrMsg show={mainErrors.fullName} />
               </div>
 
-              {/* Email — typed in manually */}
+              {/* Email */}
               <div>
                 <label className={labelClass}>Email Address <Req /></label>
                 <input
@@ -666,26 +752,26 @@ export default function StudentPreview({ onBack }) {
                   className={inputClass(mainErrors.email)}
                   value={email}
                   placeholder="Enter your email address"
-                  autoComplete="off" // ADDED
+                  autoComplete="off"
                   onChange={e => { setEmail(e.target.value); setMainErrors(p => ({ ...p, email: false })); }}
                 />
                 <ErrMsg show={mainErrors.email} />
               </div>
 
-              {/* Course — typed in manually */}
+              {/* Course */}
               <div>
                 <label className={labelClass}>Course <Req /></label>
                 <input
                   className={inputClass(mainErrors.course)}
                   value={course}
                   placeholder="Enter your course"
-                  autoComplete="off" // ADDED
+                  autoComplete="off"
                   onChange={e => { setCourse(e.target.value); setMainErrors(p => ({ ...p, course: false })); }}
                 />
                 <ErrMsg show={mainErrors.course} />
               </div>
 
-              {/* Year Level — chosen manually */}
+              {/* Year Level */}
               <div>
                 <label className={labelClass}>Year Level <Req /></label>
                 <div className="relative">
@@ -707,7 +793,7 @@ export default function StudentPreview({ onBack }) {
                 <label className={labelClass}>Request Type <Req /></label>
                 <div className="relative">
                   <select
-                    className={selectClass(mainErrors.requestType)} // CHANGED: shows the error state
+                    className={selectClass(mainErrors.requestType)}
                     value={requestType}
                     onChange={e => {
                       setRequestType(e.target.value);
@@ -717,14 +803,14 @@ export default function StudentPreview({ onBack }) {
                       setMainErrors({});
                     }}
                   >
-                    <option value="">Select Request Type</option> {/* ADDED */}
+                    <option value="">Select Request Type</option>
                     {requestTypes.map(r => (
                       <option key={r.value} value={r.value}>{r.label}</option>
                     ))}
                   </select>
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 text-xs">▼</div>
                 </div>
-                <ErrMsg show={mainErrors.requestType} /> {/* ADDED */}
+                <ErrMsg show={mainErrors.requestType} />
               </div>
 
               {/* CAV sub-choice */}
@@ -863,7 +949,7 @@ export default function StudentPreview({ onBack }) {
           </div>
         )}
 
-        {/* Results (backend-driven) */}
+        {/* Results */}
         <div className="mt-8">
           {studentId && (
             <>
@@ -883,7 +969,6 @@ export default function StudentPreview({ onBack }) {
                         <p className="text-gray-400 text-xs mt-0.5">
                           Submitted: {new Date(request.date_request).toLocaleDateString()}
                         </p>
-                        {/* CHANGED (reject): rejected requests show the reason instead of the release date */}
                         {request.status === "Rejected" ? (
                           <p className="text-xs mt-0.5 font-semibold text-[#0A2342]">
                             Reason:{" "}

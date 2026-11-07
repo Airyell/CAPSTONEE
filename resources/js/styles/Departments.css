@@ -181,6 +181,10 @@
   @apply px-5 py-4 font-semibold text-gray-800 whitespace-nowrap;
 }
 
+.dept-td-name-link {
+  @apply cursor-pointer transition-colors hover:text-[#e6a817] hover:underline active:text-[#1a1a6e];
+}
+
 .dept-view-btn {
   @apply text-[#e6a817] font-semibold text-sm hover:underline transition-colors;
 }

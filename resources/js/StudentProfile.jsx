@@ -43,9 +43,8 @@ const credentialNames = [
   "Form 138",
   "Form 137",
   "Good Moral",
-  "Grades",
-  "TOR",
-  "LOA",
+  "Transcript of Records",
+  "Leave of Absence",
   "Withdrawal",
 ];
 
@@ -202,10 +201,14 @@ export default function StudentProfile({ studentId, onBack }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Document Upload
+  const uploadInputRef = useRef(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
 
   // Preview
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewCred, setPreviewCred] = useState(null);
+  const [zoom, setZoom] = useState(100);
 
   // Edit
   const [showEditModal, setShowEditModal] = useState(false);
@@ -587,6 +590,57 @@ export default function StudentProfile({ studentId, onBack }) {
   });
 
   // ============================================================
+// UPLOAD DOCUMENT USING OCR
+// ============================================================
+
+const handleDocumentUpload = async (e) => {
+  const file = e.target.files?.[0];
+
+  // Allow selecting the same file again.
+  e.target.value = "";
+
+  if (!file) return;
+
+  if (!student.student_id) {
+    alert("No student is selected.");
+    return;
+  }
+
+  const allowedTypes = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/bmp",
+    "image/tiff",
+  ];
+
+  if (!allowedTypes.includes(file.type)) {
+    alert(
+      "Unsupported file format. Please upload a JPG, JPEG, PNG, WEBP, BMP, or TIFF image."
+    );
+    return;
+  }
+
+  try {
+    setUploadingFile(true);
+    setError("");
+
+    // Use the same upload/OCR function as Dashboard.
+    await scanner.upload(file);
+
+  } catch (err) {
+    console.error("Document upload OCR error:", err);
+
+    alert(
+      err.message ||
+        "Failed to upload and process the document. Please try again."
+    );
+  } finally {
+    setUploadingFile(false);
+  }
+};
+
+  // ============================================================
   // LOAD COLLEGES, PROGRAMS, STUDENT AND DOCUMENTS
   // ============================================================
 
@@ -919,6 +973,10 @@ export default function StudentProfile({ studentId, onBack }) {
       preview_error: previewError,
     });
 
+<<<<<<< HEAD
+=======
+    setZoom(100);
+>>>>>>> OCRback
     setShowPreviewModal(true);
 
     logActivity({
@@ -1008,27 +1066,82 @@ export default function StudentProfile({ studentId, onBack }) {
           </div>
 
           <div
-            className="profile-header-actions"
-            style={{ display: "flex", gap: "10px" }}
-          >
-            <button
-              className="profile-edit-btn"
-              onClick={() => scanner.open()}
-            >
-              Scan Document
-            </button>
+  className="profile-header-actions"
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: "10px",
+    width: "50%",
+    maxWidth: "300px",
+    margin: "15px auto 0",
+  }}
+>
+  {/* SCAN DOCUMENT */}
+  <button
+    className="profile-edit-btn"
+    style={{
+      width: "100%",
+      margin: 0,
+      padding: "10px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      textAlign: "center",
+      boxSizing: "border-box",
+    }}
+    onClick={() => scanner.open()}
+    disabled={uploadingFile}
+  >
+    Scan Document
+  </button>
 
-            <button
-              className="profile-edit-btn"
-              onClick={() => {
-                setEditForm(student);
-                setShowEditModal(true);
-              }}
-            >
-              Edit Information
-            </button>
-          </div>
-        </div>
+  {/* UPLOAD DOCUMENT */}
+  <button
+    className="profile-edit-btn"
+    style={{
+      width: "100%",
+      margin: 0,
+      padding: "10px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      textAlign: "center",
+      boxSizing: "border-box",
+    }}
+    onClick={() => uploadInputRef.current?.click()}
+    disabled={uploadingFile}
+  >
+    {uploadingFile ? "Processing..." : "Upload Document"}
+  </button>
+
+  {/* HIDDEN FILE INPUT */}
+  <input
+    ref={uploadInputRef}
+    type="file"
+    accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff"
+    style={{ display: "none" }}
+    onChange={handleDocumentUpload}
+  />
+
+  {/* EDIT INFORMATION */}
+  <button
+    className="profile-edit-btn"
+    style={{
+      gridColumn: "1 / -1",
+      justifySelf: "center",
+      width: "fit-content",
+      margin: 0,
+      textAlign: "center",
+    }}
+    onClick={() => {
+      setEditForm(student);
+      setShowEditModal(true);
+    }}
+  >
+    Edit Information
+  </button>
+</div>
+    </div>
 
         {/* STUDENT INFORMATION */}
         <div className="profile-info-card">
@@ -1112,6 +1225,7 @@ export default function StudentProfile({ studentId, onBack }) {
                     )}
                   </td>
 
+                  {/* CHANGED: per-row Scan / Rescan buttons removed; only Preview remains */}
                   <td className="credentials-td">
                     <div style={{ display: "flex", gap: "8px" }}>
                       {cred.file && (
@@ -1122,6 +1236,7 @@ export default function StudentProfile({ studentId, onBack }) {
                           Preview
                         </button>
                       )}
+<<<<<<< HEAD
 
                       <button
                         className="cred-preview-btn"
@@ -1129,6 +1244,8 @@ export default function StudentProfile({ studentId, onBack }) {
                       >
                         {cred.file ? "Rescan" : "Scan"}
                       </button>
+=======
+>>>>>>> OCRback
                     </div>
                   </td>
                 </tr>
@@ -1169,6 +1286,7 @@ export default function StudentProfile({ studentId, onBack }) {
                   <iframe
                     title={previewCred.name}
                     src={previewCred.file_url}
+<<<<<<< HEAD
                     style={{
                       width: "100%",
                       height: "500px",
@@ -1192,12 +1310,92 @@ export default function StudentProfile({ studentId, onBack }) {
                           : prev
                       )
                     }
+=======
+>>>>>>> OCRback
                     style={{
-                      maxWidth: "100%",
-                      maxHeight: "500px",
-                      objectFit: "contain",
+                      width: "100%",
+                      height: "500px",
+                      border: 0,
                     }}
                   />
+                ) : (
+                                                      <>
+                    <div
+                      style={{
+                        maxHeight: "400px",
+                        overflow: "auto",
+                        textAlign: "center",
+                      }}
+                    >
+                      <img
+                        src={previewCred.file_url}
+                        alt={previewCred.name}
+                        onError={() =>
+                          setPreviewCred((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  file_url: null,
+                                  preview_error: `The file link did not load (${
+                                    prev.file_path || "unknown path"
+                                  }).`,
+                                }
+                              : prev
+                          )
+                        }
+                        style={{
+                          display: "block",
+                          margin: "0 auto",
+                          height: `${(375 * zoom) / 100}px`,
+                          width: "auto",
+                          maxWidth: "none",
+                        }}
+                      />
+                    </div>
+
+                    <div className="zoom-bar">
+                      <button
+                        type="button"
+                        className="zoom-btn"
+                        onClick={() => setZoom((z) => Math.max(50, z - 25))}
+                        aria-label="Zoom out"
+                      >
+                        −
+                      </button>
+
+                      <input
+                        type="range"
+                        className="zoom-slider"
+                        min="50"
+                        max="300"
+                        step="5"
+                        value={zoom}
+                        onChange={(e) => setZoom(Number(e.target.value))}
+                        style={{
+                          "--zoom-pct": `${((zoom - 50) / 250) * 100}%`,
+                        }}
+                      />
+
+                      <button
+                        type="button"
+                        className="zoom-btn"
+                        onClick={() => setZoom((z) => Math.min(300, z + 25))}
+                        aria-label="Zoom in"
+                      >
+                        +
+                      </button>
+
+                      <span className="zoom-value">{zoom}%</span>
+
+                      <button
+                        type="button"
+                        className="zoom-reset"
+                        onClick={() => setZoom(100)}
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </>
                 )
               ) : (
                 <div className="text-center">

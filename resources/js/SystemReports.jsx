@@ -16,7 +16,7 @@ function TrendChart({ data }) {
   const maxVal = Math.max(...data.map(d => Math.max(d.uploads, d.requests)), 1) * 1.2;
   const barGroupWidth = chartWidth / data.length;
   const barWidth = barGroupWidth * 0.28;
-  const yTicks = [0, 30, 60, 90, 120];
+  const yTicks = [0, 60, 90, 120];
 
   return (
     <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="sr-bar-chart-svg" preserveAspectRatio="xMidYMid meet">
@@ -85,6 +85,10 @@ function RequestedChart({ data, maxVal }) {
 // ── COLORS FOR STORED CREDENTIALS BARS ───────────────────────────────
 const BAR_COLORS = ["#e6a817","#e6a817","#3b82f6","#a78bfa","#22c55e","#ec4899","#6366f1","#f87171"];
 
+// CHANGED: shortens long labels and ends them with "..."
+const truncateLabel = (text, maxLength = 18) =>
+  text && text.length > maxLength ? text.slice(0, maxLength).trimEnd() + "..." : text;
+
 // ── MAIN COMPONENT ────────────────────────────────────────────────────
 export default function SystemReports() {
   const [year, setYear]                       = useState(new Date().getFullYear());
@@ -94,6 +98,13 @@ export default function SystemReports() {
   const [requestedCreds, setRequestedCreds]   = useState([]);
   const [loading, setLoading]                 = useState(true);
   const [error, setError]                     = useState(null);
+
+  // ADDED: Archived Logs states
+  const [showLogs, setShowLogs]               = useState(false);
+  const [logs, setLogs]                       = useState([]);
+  const [logsLoading, setLogsLoading]         = useState(false);
+  const [logsError, setLogsError]             = useState(null);
+  const [logMonth, setLogMonth]               = useState("all"); // "all" or 0-11
 
   useEffect(() => {
     setLoading(true);
@@ -114,12 +125,34 @@ export default function SystemReports() {
       .finally(() => setLoading(false));
   }, [year]);
 
+  // CHANGED: load archived logs on page load (and when the year changes), not only when the card is opened
+  useEffect(() => {
+    setLogsLoading(true);
+    setLogsError(null);
+    fetch(`${API_BASE}/reports/archived-logs?year=${year}`, { headers: authHeaders() }) // RBAC
+      .then(res => {
+        if (res.status === 401 || res.status === 403) throw new Error("Not authorized. Please log out and log in again.");
+        if (!res.ok) throw new Error("Couldn't load archived logs.");
+        return res.json();
+      })
+      .then(json => setLogs(Array.isArray(json) ? json : (json.logs || [])))
+      .catch(err => setLogsError(err.message))
+      .finally(() => setLogsLoading(false));
+  }, [year]);
+
+  // ADDED: filter logs by selected month
+  const getLogDate = (l) => new Date(l.date || l.created_at || l.timestamp);
+  const filteredLogs = logs.filter(l =>
+    logMonth === "all" || getLogDate(l).getMonth() === Number(logMonth)
+  );
+
   const maxStored    = Math.max(...storedCreds.map(c => c.value), 1);
   const maxRequested = Math.max(...requestedCreds.map(c => c.value), 1) * 1.15;
 
   // Year selector — current year and 4 years back
   const currentYear = new Date().getFullYear();
-  const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - i);
+  const START_YEAR = 2022; // earliest year to show
+  const yearOptions = Array.from({ length: currentYear - START_YEAR + 1 }, (_, i) => currentYear - i);
 
   return (
     <>
@@ -136,7 +169,7 @@ export default function SystemReports() {
       )}
 
       {/* Stat Cards */}
-      <div className="sr-stats-grid">
+      <div className="sr-stats-grid sr-stats-grid-4"> {/* CHANGED: added sr-stats-grid-4 */}
         {loading
           ? Array(3).fill(null).map((_, i) => ( // CHANGED: 4 -> 3 placeholders
               <div key={i} className="sr-stat-card" style={{ opacity: 0.4 }}>
@@ -155,7 +188,63 @@ export default function SystemReports() {
               </div>
             ))
         }
+
+        {/* ADDED: Archived Logs card (clickable) */}
+        <div
+          className="sr-stat-card sr-archived-card"
+          role="button"
+          tabIndex={0}
+          onClick={() => setShowLogs(prev => !prev)}
+          onKeyDown={e => { if (e.key === "Enter" || e.key === " ") setShowLogs(prev => !prev); }}
+        >
+          <p className="sr-stat-label">Archived Logs</p>
+          <p className="sr-stat-value">{!logsLoading && !logsError ? logs.length : "—"}</p> {/* CHANGED: shows count without needing a click */}
+          <p className="sr-stat-sub">{showLogs ? "Click to hide logs" : "Click to view logs by month"}</p>
+          <div className="sr-stat-accent" />
+        </div>
       </div>
+
+      {/* ADDED: Archived Logs panel with month filter */}
+      {showLogs && (
+        <div className="sr-card">
+          <div className="sr-card-header">
+            <h3 className="sr-card-title">Archived Logs</h3>
+            <div className="sr-date-row">
+              <label className="sr-date-label">Month:</label>
+              <select
+                className="sr-date-input"
+                value={logMonth}
+                onChange={e => setLogMonth(e.target.value)}
+              >
+                <option value="all">All Months</option>
+                {months.map((m, i) => <option key={m} value={i}>{m}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {logsLoading ? (
+            <p className="sr-logs-msg">Loading…</p>
+          ) : logsError ? (
+            <p className="sr-logs-msg sr-logs-msg-error">{logsError}</p>
+          ) : filteredLogs.length === 0 ? (
+            <p className="sr-logs-msg">No archived logs for this month.</p>
+          ) : (
+            <div className="sr-logs-list">
+              {filteredLogs.map((l, i) => {
+                const d = getLogDate(l);
+                return (
+                  <div key={l.id ?? i} className="sr-log-row">
+                    <span>{l.message || l.action || l.description || "—"}{l.user ? ` — ${l.user}` : ""}</span>
+                    <span className="sr-log-date">
+                      {isNaN(d) ? "—" : `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Monthly Upload Trends */}
       <div className="sr-card">
@@ -193,7 +282,7 @@ export default function SystemReports() {
               ? <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13 }}>No data yet.</p>
               : storedCreds.map((c, i) => (
                   <div key={i} className="sr-hbar-row">
-                    <span className="sr-hbar-label">{c.label}</span>
+                    <span className="sr-hbar-label">{truncateLabel(c.label)}</span> {/* CHANGED: truncated label */}
                     <div className="sr-hbar-track">
                       <div
                         className="sr-hbar-fill"

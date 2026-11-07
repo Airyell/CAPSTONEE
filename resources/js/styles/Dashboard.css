@@ -209,6 +209,10 @@
   @apply px-4 py-4 font-semibold text-gray-800 whitespace-nowrap;
 }
 
+.activity-td-name-link {
+  @apply cursor-pointer transition-colors hover:text-[#e6a817] hover:underline active:text-[#1a1a6e];
+}
+
 .activity-td-action {
   @apply px-4 py-4 text-gray-600;
 }

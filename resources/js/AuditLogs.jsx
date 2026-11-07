@@ -21,11 +21,8 @@ const LOG_SELECT = `
   module_name,
   date_time,
   status,
-  tbl_staff ( name, username, user_role )
-`; // CHANGED (name): added "name" | CHANGED (unknown login): no longer !inner, so rows with no staff (unknown-username login attempts) still load
-
-// ADDED: hide admin activity (done here because rows with no staff must stay visible)
-const isVisibleRow = (row) => row.tbl_staff?.user_role !== "Admin";
+  tbl_staff!inner ( name, username, user_role )
+`; // CHANGED (name): added "name"
 
 const mapLogRow = (row) => ({
   id: row.activity_id,
@@ -53,6 +50,7 @@ export default function AuditLogs() {
       const { data, error } = await supabase
         .from("tbl_system_activity")
         .select(LOG_SELECT)
+        .neq("tbl_staff.user_role", "Admin") // CHANGED: hide admin activity
         .order("date_time", { ascending: false });
 
       if (!isMounted) return;
@@ -61,7 +59,7 @@ export default function AuditLogs() {
         setErrorMsg(error.message);
         setLogs([]);
       } else {
-        setLogs((data || []).filter(isVisibleRow).map(mapLogRow)); // CHANGED: hide admin activity
+        setLogs((data || []).map(mapLogRow));
         setErrorMsg("");
       }
       setLoading(false);
@@ -105,11 +103,11 @@ export default function AuditLogs() {
           const { data, error } = await supabase
             .from("tbl_system_activity")
             .select(LOG_SELECT)
+            .neq("tbl_staff.user_role", "Admin") // CHANGED: admin rows return nothing, so they are skipped below
             .eq("activity_id", activityId)
             .single();
 
           if (error || !data) return;
-          if (!isVisibleRow(data)) return; // CHANGED: skip admin activity
 
           const mappedRow = mapLogRow(data);
 

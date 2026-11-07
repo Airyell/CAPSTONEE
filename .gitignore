@@ -28,6 +28,10 @@ venv/
 __pycache__/
 *.pyc
 .env
+<<<<<<< HEAD
 .env.local-folders
 .env.*
 !.env.example
+=======
+.env
+>>>>>>> OCRback
