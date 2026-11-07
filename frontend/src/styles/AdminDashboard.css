@@ -1,0 +1,349 @@
+@reference "tailwindcss";
+
+/* ── Layout ── */
+.admin-layout {
+  @apply flex h-screen overflow-hidden;
+  background-color: #0d1117;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.admin-main {
+  @apply flex-1 flex flex-col overflow-hidden;
+}
+
+.admin-content {
+  @apply flex-1 overflow-y-auto px-8 py-8;
+}
+
+/* ── Sidebar ── */
+.admin-sidebar {
+  @apply transition-all duration-300 overflow-hidden flex flex-col shrink-0;
+  background-color: #0a0e1a;
+}
+
+.admin-sidebar-brand {
+  @apply px-7 py-7 border-b;
+  border-color: rgba(255,255,255,0.06);
+}
+
+.admin-sidebar-brand-title {
+  @apply text-white text-xl font-black tracking-tight;
+}
+
+.admin-sidebar-brand-sub {
+  @apply text-[10px] tracking-widest uppercase mt-0.5;
+  color: rgba(255,255,255,0.25);
+}
+
+.admin-sidebar-section-label {
+  @apply px-5 pt-6 pb-2 text-[10px] font-bold tracking-widest uppercase;
+  color: rgba(255,255,255,0.2);
+}
+
+.admin-sidebar-nav {
+  @apply flex-1 px-4 pb-6 flex flex-col gap-1;
+}
+
+.admin-sidebar-nav-item {
+  @apply text-left px-4 py-2.5 rounded-lg text-sm font-semibold tracking-wide transition-all;
+  color: rgba(255,255,255,0.4);
+}
+
+.admin-sidebar-nav-item:hover {
+  color: rgba(255,255,255,0.9);
+  background-color: rgba(255,255,255,0.06);
+}
+
+.admin-sidebar-nav-item-active {
+  @apply text-left px-4 py-2.5 rounded-lg text-sm font-semibold tracking-wide transition-all bg-[#e6a817] text-white shadow;
+}
+
+.admin-sidebar-footer {
+  @apply px-7 py-5 border-t;
+  border-color: rgba(255,255,255,0.06);
+}
+
+.admin-sidebar-footer-text {
+  @apply text-[10px] uppercase tracking-widest;
+  color: rgba(255,255,255,0.15);
+}
+
+/* ── Topbar ── */
+.admin-topbar {
+  @apply h-16 flex items-center px-6 shrink-0 justify-between border-b;
+  background-color: #0d1117;
+  border-color: rgba(255,255,255,0.06);
+}
+
+.admin-topbar-left {
+  @apply flex items-center gap-4;
+}
+
+.admin-topbar-toggle {
+  @apply flex flex-col justify-center gap-1.5 p-2 rounded transition-colors cursor-pointer;
+}
+
+.admin-topbar-toggle:hover {
+  background-color: rgba(255,255,255,0.06);
+}
+
+.admin-topbar-hamburger-line {
+  @apply block w-5 h-0.5 rounded-full;
+  background-color: rgba(255,255,255,0.5);
+}
+
+.admin-topbar-date {
+  @apply text-xs font-semibold px-3 py-1.5 rounded-lg;
+  color: rgba(255,255,255,0.35);
+  background-color: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+}
+
+.admin-topbar-right {
+  @apply flex items-center gap-3;
+}
+
+.admin-topbar-staff-btn {
+  @apply flex items-center gap-2 px-3 py-2 rounded-lg transition-colors cursor-pointer;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.admin-topbar-staff-btn:hover {
+  background-color: rgba(255,255,255,0.05);
+}
+
+.admin-topbar-staff-name {
+  @apply text-sm font-bold;
+  color: rgba(255,255,255,0.8);
+}
+
+.admin-topbar-avatar {
+  @apply w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-black bg-[#e6a817];
+}
+
+.admin-topbar-dropdown {
+  @apply absolute right-0 mt-1 w-44 rounded-xl shadow-2xl z-50 overflow-hidden;
+  background-color: #161b27;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.admin-topbar-dropdown-logout {
+  @apply w-full text-left px-5 py-3 text-sm font-semibold transition-colors text-red-400;
+}
+
+.admin-topbar-dropdown-logout:hover {
+  @apply bg-red-500/10;
+}
+
+/* ── Page Header ── */
+.admin-page-title {
+  @apply text-2xl font-black tracking-tight text-white;
+}
+
+.admin-page-sub {
+  @apply text-sm mt-1;
+  color: rgba(255,255,255,0.35);
+}
+
+/* ── Stat Cards ── */
+.admin-stats-grid {
+  @apply grid grid-cols-3 gap-4 mt-6 mb-6;
+}
+
+.admin-stat-card {
+  @apply rounded-2xl px-6 py-6 flex flex-col justify-between;
+  background-color: #161b27;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.admin-stat-label {
+  @apply text-[10px] font-bold tracking-widest uppercase mb-3;
+  color: rgba(255,255,255,0.35);
+}
+
+.admin-stat-value {
+  @apply text-3xl font-black tracking-tight text-white;
+}
+
+.admin-stat-sub {
+  @apply text-xs mt-1;
+  color: rgba(255,255,255,0.3);
+}
+
+.admin-stat-accent {
+  @apply h-0.5 w-8 rounded-full mt-3 bg-[#e6a817];
+}
+
+/* ── Charts Row ── */
+.admin-charts-row {
+  @apply grid gap-5 mb-6;
+  grid-template-columns: 1fr 340px;
+}
+
+.admin-chart-card {
+  @apply rounded-2xl px-7 py-6;
+  background-color: #161b27;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.admin-chart-title {
+  @apply text-sm font-black text-white tracking-tight mb-5;
+}
+
+/* ── Bar Chart ── */
+.admin-bar-chart-svg-wrapper {
+  @apply w-full overflow-visible;
+}
+
+.admin-bar-legend {
+  @apply flex items-center gap-6 mt-5;
+}
+
+.admin-bar-legend-item {
+  @apply flex items-center gap-2 text-xs font-semibold;
+  color: rgba(255,255,255,0.4);
+}
+
+.admin-legend-dot-gold {
+  @apply w-2.5 h-2.5 rounded-full bg-[#e6a817];
+}
+
+.admin-legend-dot-blue {
+  @apply w-2.5 h-2.5 rounded-full bg-blue-500;
+}
+
+/* ── Donut Chart ── */
+.admin-donut-wrapper {
+  @apply flex flex-col items-center mb-5;
+}
+
+.admin-donut-legend {
+  @apply w-full flex flex-col gap-2 mt-4;
+}
+
+.admin-donut-legend-row {
+  @apply flex items-center justify-between text-xs;
+}
+
+.admin-donut-legend-label {
+  @apply flex items-center gap-2;
+  color: rgba(255,255,255,0.5);
+}
+
+.admin-donut-legend-dot {
+  @apply w-2 h-2 rounded-full;
+}
+
+.admin-donut-legend-value {
+  @apply font-bold text-white;
+}
+
+/* ── Recent Activities Table ── */
+.admin-activity-card {
+  @apply rounded-2xl px-7 py-6;
+  background-color: #161b27;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.admin-activity-title {
+  @apply text-sm font-black text-white tracking-tight mb-5;
+}
+
+.admin-activity-table-wrapper {
+  @apply w-full overflow-x-auto;
+}
+
+.admin-activity-table {
+  @apply w-full border-collapse;
+}
+
+.admin-activity-th {
+  @apply px-4 py-3 text-left text-[10px] font-bold tracking-widest uppercase;
+  color: rgba(255,255,255,0.25);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.admin-activity-th-right {
+  @apply text-right;
+}
+
+.admin-activity-tr {
+  @apply transition-colors;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.admin-activity-tr:last-child {
+  border-bottom: none;
+}
+
+.admin-activity-tr:hover {
+  background-color: rgba(255,255,255,0.02);
+}
+
+.admin-activity-td {
+  @apply px-4 py-3.5 align-middle;
+}
+
+.admin-activity-td-right {
+  @apply text-right;
+}
+
+/* Staff cell */
+.admin-activity-staff-cell {
+  @apply flex items-center gap-3;
+}
+
+.admin-activity-staff-avatar {
+  @apply w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-black shrink-0;
+  background-color: rgba(230,168,23,0.18);
+  color: #e6a817;
+  border: 1px solid rgba(230,168,23,0.25);
+}
+
+.admin-activity-staff-name {
+  @apply text-sm font-semibold text-white whitespace-nowrap;
+}
+
+/* Activity cell */
+.admin-activity-action-cell {
+  @apply flex items-start gap-3;
+}
+
+.admin-activity-dot-sm {
+  @apply w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5;
+  background-color: rgba(230,168,23,0.15);
+}
+
+.admin-activity-action {
+  @apply text-sm font-semibold text-white;
+}
+
+.admin-activity-student {
+  @apply text-xs mt-0.5;
+  color: rgba(255,255,255,0.35);
+}
+
+/* Date & time cell */
+.admin-activity-date {
+  @apply text-xs font-semibold;
+  color: rgba(255,255,255,0.55);
+}
+
+.admin-activity-time {
+  @apply text-xs mt-0.5;
+  color: rgba(255,255,255,0.25);
+}
+
+/* ── Empty State ── */
+.admin-empty-title {
+  @apply text-2xl font-black text-white tracking-tight mb-2;
+}
+
+.admin-empty-sub {
+  color: rgba(255,255,255,0.35);
+  @apply text-sm;
+}
+
+.admin-empty-accent {
+  @apply mt-4 h-0.5 w-12 bg-[#e6a817] rounded-full mx-auto;
+}

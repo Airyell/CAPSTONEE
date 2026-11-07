@@ -1,0 +1,159 @@
+@reference "tailwindcss";
+
+/* ── Page Header ── */
+.al-page-title {
+  @apply text-2xl font-black text-white tracking-tight;
+}
+
+.al-page-sub {
+  @apply text-sm mt-1;
+  color: rgba(255,255,255,0.35);
+}
+
+/* ── Stat Cards ── */
+.al-stats-grid {
+  @apply grid grid-cols-3 gap-4 mt-6 mb-6;
+}
+
+.al-stat-card {
+  @apply rounded-2xl px-7 py-6 flex flex-col justify-between;
+  background-color: #161b27;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.al-stat-label {
+  @apply text-[10px] font-bold tracking-widest uppercase mb-3;
+  color: rgba(255,255,255,0.35);
+}
+
+.al-stat-value {
+  @apply text-4xl font-black tracking-tight text-white;
+}
+
+.al-stat-accent {
+  @apply h-0.5 w-8 rounded-full mt-3 bg-[#e6a817];
+}
+
+/* ── Filter Bar ── */
+.al-filter-bar {
+  @apply flex items-center gap-3 mb-4;
+}
+
+.al-search {
+  @apply w-10 h-10 rounded-lg flex items-center justify-center transition-colors cursor-pointer shrink-0;
+  background-color: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.4);
+  font-size: 14px;
+}
+
+.al-select {
+  @apply flex-1 rounded-lg px-4 py-2.5 text-sm outline-none transition-colors cursor-pointer;
+  background-color: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.6);
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='rgba(255,255,255,0.3)' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.al-select option {
+  background-color: #161b27;
+  color: rgba(255,255,255,0.8);
+}
+
+/* ── Table ── */
+.al-table-wrapper {
+  @apply rounded-2xl overflow-hidden;
+  background-color: #161b27;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.al-table {
+  @apply w-full text-sm;
+}
+
+.al-thead {
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.al-th {
+  @apply text-left px-5 py-3 text-[10px] font-bold tracking-widest uppercase;
+  color: rgba(255,255,255,0.25);
+}
+
+.al-th-first {
+  @apply text-left px-7 py-3 text-[10px] font-bold tracking-widest uppercase;
+  color: rgba(255,255,255,0.25);
+}
+
+.al-row-even {
+  border-top: 1px solid rgba(255,255,255,0.03);
+  transition: background-color 0.15s;
+}
+
+.al-row-even:hover {
+  background-color: rgba(255,255,255,0.025);
+}
+
+.al-row-odd {
+  border-top: 1px solid rgba(255,255,255,0.03);
+  background-color: rgba(255,255,255,0.015);
+  transition: background-color 0.15s;
+}
+
+.al-row-odd:hover {
+  background-color: rgba(255,255,255,0.03);
+}
+
+.al-td-timestamp {
+  @apply px-7 py-4 text-xs whitespace-nowrap font-mono;
+  color: rgba(255,255,255,0.3);
+}
+
+.al-td-name {
+  @apply px-5 py-4 text-sm font-bold whitespace-nowrap;
+  color: rgba(255,255,255,0.85);
+}
+
+.al-td {
+  @apply px-5 py-4 text-sm;
+  color: rgba(255,255,255,0.5);
+}
+
+.al-td-desc {
+  @apply px-5 py-4 text-sm;
+  color: rgba(255,255,255,0.45);
+  max-width: 280px;
+}
+
+.al-td-module {
+  @apply px-5 py-4 text-xs font-semibold;
+  color: rgba(255,255,255,0.35);
+}
+
+.al-td-status {
+  @apply px-5 py-4;
+}
+
+/* ── Status Badges ── */
+.al-badge-success {
+  @apply text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wide bg-green-500/15 text-green-400;
+}
+
+.al-badge-failed {
+  @apply text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wide bg-red-500/15 text-red-400;
+}
+
+.al-badge-warning {
+  @apply text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wide bg-yellow-500/15 text-yellow-400;
+}
+
+/* ── Empty ── */
+.al-empty {
+  @apply text-center py-16 text-sm;
+  color: rgba(255,255,255,0.25);
+}

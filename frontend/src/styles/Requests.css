@@ -1,0 +1,163 @@
+@reference "tailwindcss";
+
+/* ── Page Header ── */
+.req-page-header {
+  @apply flex items-start justify-between mb-6;
+}
+
+.req-page-title {
+  @apply text-2xl font-black text-[#1a1a6e] tracking-tight;
+}
+
+.req-page-sub {
+  @apply text-sm text-gray-400 mt-1;
+}
+
+/* ── Summary Cards ── */
+.req-summary-grid {
+  @apply grid grid-cols-3 gap-5 mb-6;
+}
+
+.req-summary-card {
+  @apply bg-white rounded-2xl border border-gray-100 shadow-sm px-7 py-6 flex flex-col gap-1;
+}
+
+.req-summary-card-gold {
+  @apply bg-[#e6a817] rounded-2xl px-7 py-6 flex flex-col gap-1;
+}
+
+.req-summary-label {
+  @apply text-[11px] font-bold tracking-widest uppercase text-gray-400;
+}
+
+.req-summary-label-gold {
+  @apply text-[11px] font-bold tracking-widest uppercase text-white/70;
+}
+
+.req-summary-value {
+  @apply text-3xl font-black tracking-tight text-[#1a1a6e];
+}
+
+.req-summary-value-white {
+  @apply text-3xl font-black tracking-tight text-white;
+}
+
+.req-summary-accent {
+  @apply h-0.5 w-8 rounded-full mt-1 bg-[#e6a817];
+}
+
+.req-summary-accent-white {
+  @apply h-0.5 w-8 rounded-full mt-1 bg-white/40;
+}
+
+/* ── Filter Bar ── */
+.req-filter-bar {
+  @apply flex items-center gap-3 mb-4;
+}
+
+.req-search {
+  @apply flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-700 outline-none transition-colors bg-white;
+}
+
+.req-search:focus {
+  @apply border-[#e6a817];
+}
+
+.req-select {
+  @apply border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-700 outline-none bg-white transition-colors cursor-pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%231a1a6e' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.req-select:focus {
+  @apply border-[#e6a817];
+}
+
+/* ── Table ── */
+.req-table-wrapper {
+  @apply bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden;
+}
+
+.req-table {
+  @apply w-full text-sm;
+}
+
+.req-thead {
+  @apply bg-gray-50 text-gray-400 text-[11px] uppercase tracking-widest;
+}
+
+.req-th {
+  @apply text-left px-5 py-3 font-semibold;
+}
+
+.req-th-first {
+  @apply text-left px-7 py-3 font-semibold;
+}
+
+.req-row-even {
+  @apply border-t border-gray-50 transition-colors hover:bg-[#1a1a6e]/[0.02];
+}
+
+.req-row-odd {
+  @apply border-t border-gray-50 bg-gray-50/40 transition-colors hover:bg-[#1a1a6e]/[0.02];
+}
+
+.req-td {
+  @apply px-5 py-4 text-gray-500 text-xs;
+}
+
+.req-td-first {
+  @apply px-7 py-4 text-xs font-bold text-[#1a1a6e] whitespace-nowrap;
+}
+
+.req-td-id {
+  @apply px-5 py-4 text-xs text-gray-400 whitespace-nowrap;
+}
+
+.req-td-name {
+  @apply px-5 py-4 font-bold text-gray-800 whitespace-nowrap;
+}
+
+.req-td-docs {
+  @apply px-5 py-4;
+}
+
+.req-td-remarks {
+  @apply px-5 py-4 text-xs text-gray-500 max-w-[160px];
+}
+
+/* ── Doc Tags ── */
+.req-doc-tag {
+  @apply inline-block text-[10px] font-bold px-2.5 py-1 rounded-md bg-[#1a1a6e]/10 text-[#1a1a6e] mr-1 mb-1 whitespace-nowrap;
+}
+
+/* ── Status Badges ── */
+.req-status-pending {
+  @apply text-[11px] font-bold px-3 py-1 rounded-full uppercase bg-yellow-100 text-yellow-700 whitespace-nowrap;
+}
+
+.req-status-completed {
+  @apply text-[11px] font-bold px-3 py-1 rounded-full uppercase bg-green-100 text-green-700 whitespace-nowrap;
+}
+
+.req-status-cancelled {
+  @apply text-[11px] font-bold px-3 py-1 rounded-full uppercase bg-red-100 text-red-600 whitespace-nowrap;
+}
+
+/* ── Action Button ── */
+.req-complete-btn {
+  @apply text-[#e6a817] font-bold text-sm hover:underline transition-colors whitespace-nowrap;
+}
+
+.req-completed-label {
+  @apply text-gray-300 text-sm font-semibold;
+}
+
+/* ── Empty ── */
+.req-empty {
+  @apply text-center py-16 text-gray-400 text-sm;
+}

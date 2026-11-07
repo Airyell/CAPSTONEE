@@ -1,0 +1,200 @@
+@reference "tailwindcss";
+
+/* ── Page Header ── */
+.students-header {
+  @apply flex items-center justify-between mb-6;
+}
+
+.students-title {
+  @apply text-xl font-black text-[#1a1a6e] tracking-tight;
+}
+
+.students-add-btn {
+  @apply bg-[#1a1a6e] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors;
+}
+
+.students-add-btn:hover {
+  @apply bg-[#12125a];
+}
+
+/* ── Search & Filter Bar ── */
+.students-filter-bar {
+  @apply flex items-center gap-3 mb-6 flex-wrap;
+}
+
+.students-search {
+  @apply flex-1 min-w-[200px] border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-700 outline-none transition-colors;
+}
+
+.students-search:focus {
+  @apply border-[#e6a817];
+}
+
+.students-select {
+  @apply border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-700 outline-none bg-white transition-colors cursor-pointer;
+}
+
+.students-select:focus {
+  @apply border-[#e6a817];
+}
+
+/* ── Table ── */
+.students-table-wrapper {
+  @apply bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden;
+}
+
+.students-table {
+  @apply w-full text-sm;
+}
+
+.students-thead {
+  @apply bg-gray-50 text-gray-400 text-[11px] uppercase tracking-widest;
+}
+
+.students-th {
+  @apply text-left px-5 py-3 font-semibold;
+}
+
+.students-th-first {
+  @apply text-left px-7 py-3 font-semibold;
+}
+
+.students-row-even {
+  @apply border-t border-gray-50 transition-colors;
+}
+
+.students-row-even:hover {
+  @apply bg-[#1a1a6e]/[0.02];
+}
+
+.students-row-odd {
+  @apply border-t border-gray-50 bg-gray-50/40 transition-colors;
+}
+
+.students-row-odd:hover {
+  @apply bg-[#1a1a6e]/[0.02];
+}
+
+.students-td {
+  @apply px-5 py-4 text-gray-600;
+}
+
+.students-td-first {
+  @apply px-7 py-4 font-bold text-[#1a1a6e] whitespace-nowrap;
+}
+
+.students-td-name {
+  @apply px-5 py-4 font-semibold text-gray-800 whitespace-nowrap;
+}
+
+.students-view-btn {
+  @apply text-[#e6a817] font-semibold text-sm hover:underline transition-colors;
+}
+
+/* ── Status Badge ── */
+.status-badge {
+  @apply text-[11px] font-bold tracking-wide px-3 py-1 rounded-full uppercase;
+}
+
+.status-active {
+  @apply bg-green-100 text-green-700;
+}
+
+.status-inactive {
+  @apply bg-gray-100 text-gray-500;
+}
+
+.status-graduated {
+  @apply bg-[#1a1a6e]/10 text-[#1a1a6e];
+}
+
+/* ── Modal Overlay ── */
+.modal-overlay {
+  @apply fixed inset-0 bg-black/40 z-50 flex items-center justify-center;
+}
+
+.modal-card {
+  @apply bg-white rounded-2xl shadow-2xl w-full max-w-lg px-10 py-10;
+}
+
+.modal-title {
+  @apply text-xl font-black text-[#1a1a6e] tracking-tight mb-1;
+}
+
+.modal-sub {
+  @apply text-xs text-gray-400 mb-7;
+}
+
+.modal-label {
+  @apply block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4;
+}
+
+.modal-input {
+  @apply w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-700 outline-none transition-colors mb-5;
+}
+
+.modal-input:focus {
+  @apply border-[#e6a817];
+}
+
+.modal-select {
+  @apply w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-700 outline-none bg-white transition-colors mb-5 cursor-pointer;
+}
+
+.modal-select:focus {
+  @apply border-[#e6a817];
+}
+
+.modal-extract-btn {
+  @apply w-full border-2 border-dashed border-[#1a1a6e]/30 rounded-lg px-4 py-4 text-sm text-[#1a1a6e] font-semibold text-center transition-colors cursor-pointer mb-100;
+}
+
+.modal-extract-btn:hover {
+  @apply border-[#e6a817] text-[#e6a817] bg-[#e6a817]/5;
+}
+
+.modal-footer {
+  @apply flex items-center justify-end gap-3 mt-2;
+}
+
+.modal-cancel-btn {
+  @apply px-5 py-2.5 text-sm font-semibold text-gray-500 rounded-lg transition-colors mt-5;
+}
+
+.modal-cancel-btn:hover {
+  @apply bg-gray-100;
+}
+
+.modal-submit-btn {
+  @apply px-6 py-2.5 text-sm font-semibold bg-[#e6a817] text-white rounded-lg transition-colors mt-5;
+}
+
+.modal-submit-btn:hover {
+  @apply bg-[#cf9410];
+}
+
+/* ── Empty State ── */
+.students-empty {
+  @apply text-center py-16 text-gray-400 text-sm;
+}
+
+/* ── Clean Select Arrow ── */
+.students-select {
+  @apply border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-700 outline-none bg-white transition-colors cursor-pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%231a1a6e' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.modal-select {
+  @apply w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-700 outline-none bg-white transition-colors mb-5 cursor-pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%231a1a6e' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}

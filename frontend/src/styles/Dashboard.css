@@ -1,0 +1,265 @@
+
+/* ── Layout ── */
+.dash-layout {
+  @apply flex h-screen bg-gray-50 overflow-hidden;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.dash-main {
+  @apply flex-1 flex flex-col overflow-hidden;
+}
+
+.dash-content {
+  @apply flex-1 overflow-y-auto px-8 py-8;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  @apply transition-all duration-300 overflow-hidden bg-[#1a1a6e] flex flex-col shrink-0;
+}
+
+.sidebar-brand {
+  @apply px-7 py-7 border-b border-white/10;
+}
+
+.sidebar-brand-title {
+  @apply text-white text-xl font-black tracking-tight;
+}
+
+.sidebar-brand-sub {
+  @apply text-white/40 text-[10px] tracking-widest uppercase mt-0.5;
+}
+
+.sidebar-nav {
+  @apply flex-1 px-4 py-6 flex flex-col gap-1;
+}
+
+.sidebar-nav-item {
+  @apply text-left px-4 py-2.5 rounded-lg text-sm font-semibold tracking-wide transition-all text-white/60;
+}
+
+.sidebar-nav-item:hover {
+  @apply text-white bg-white/10;
+}
+
+.sidebar-nav-item-active {
+  @apply text-left px-4 py-2.5 rounded-lg text-sm font-semibold tracking-wide transition-all bg-[#e6a817] text-white shadow;
+}
+
+.sidebar-footer {
+  @apply px-7 py-5 border-t border-white/10;
+}
+
+.sidebar-footer-text {
+  @apply text-white/25 text-[10px] uppercase tracking-widest;
+}
+
+/* ── Topbar ── */
+.topbar {
+  @apply h-16 bg-white border-b border-gray-200 flex items-center px-6 shrink-0 justify-between;
+}
+
+.topbar-toggle {
+  @apply text-[#1a1a6e] font-bold text-sm tracking-widest px-3 py-1.5 border border-[#1a1a6e]/20 rounded transition-colors;
+}
+
+.topbar-toggle:hover {
+  @apply bg-[#1a1a6e]/5;
+}
+
+.topbar-hamburger-line {
+  @apply block w-5 h-0.5 bg-[#1a1a6e] my-1 rounded;
+}
+
+.topbar-page-title {
+  @apply text-[#1a1a6e] font-black text-lg tracking-tight;
+}
+
+.topbar-staff-btn {
+  @apply flex items-center gap-3 px-4 py-2 rounded-lg transition border border-transparent;
+}
+
+.topbar-staff-btn:hover {
+  @apply bg-gray-50 border-gray-200;
+}
+
+.topbar-staff-name {
+  @apply text-[#1a1a6e] text-sm font-bold leading-tight;
+}
+
+.topbar-staff-role {
+  @apply text-gray-400 text-[10px] tracking-widest uppercase;
+}
+
+.topbar-avatar {
+  @apply w-8 h-8 rounded-full bg-[#1a1a6e] flex items-center justify-center text-white text-xs font-black;
+}
+
+.topbar-dropdown {
+  @apply absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden;
+}
+
+.topbar-dropdown-profile {
+  @apply w-full text-left px-5 py-3 text-sm text-[#1a1a6e] font-semibold transition border-b border-gray-100;
+}
+
+.topbar-dropdown-profile:hover {
+  @apply bg-gray-50;
+}
+
+.topbar-dropdown-logout {
+  @apply w-full text-left px-5 py-3 text-sm text-red-600 font-semibold transition;
+}
+
+.topbar-dropdown-logout:hover {
+  @apply bg-red-50;
+}
+
+/* ── Stat Cards ── */
+.stat-card {
+  @apply rounded-2xl px-7 py-6 shadow-sm border flex flex-col gap-1;
+}
+
+.stat-card-default {
+  @apply bg-white border-gray-100;
+}
+
+.stat-card-highlighted {
+  @apply bg-[#e6a817] border-[#e6a817];
+}
+
+.stat-label {
+  @apply text-[11px] font-bold tracking-widest uppercase text-gray-400;
+}
+
+.stat-label-highlighted {
+  @apply text-[11px] font-bold tracking-widest uppercase text-white/80;
+}
+
+.stat-value {
+  @apply text-4xl font-black tracking-tight text-[#1a1a6e];
+}
+
+.stat-value-highlighted {
+  @apply text-4xl font-black tracking-tight text-white;
+}
+
+.stat-accent {
+  @apply h-0.5 w-8 rounded-full mt-1 bg-[#e6a817];
+}
+
+.stat-accent-highlighted {
+  @apply h-0.5 w-8 rounded-full mt-1 bg-white/40;
+}
+
+/* ── New Students Table ── */
+.activity-wrapper {
+  @apply bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden;
+}
+
+.activity-header {
+  @apply px-7 py-5 border-b border-gray-100 flex items-center justify-between;
+}
+
+.activity-header-title {
+  @apply text-[#1a1a6e] font-black text-base tracking-tight;
+}
+
+.activity-header-sub {
+  @apply text-gray-400 text-xs mt-0.5;
+}
+
+.activity-header-label {
+  @apply text-[10px] text-gray-300 tracking-widest uppercase font-semibold;
+}
+
+.activity-thead {
+  @apply bg-gray-50 text-gray-400 text-[11px] uppercase tracking-widest;
+}
+
+.activity-th {
+  @apply text-left px-4 py-3 font-semibold;
+}
+
+.activity-th-first {
+  @apply text-left px-7 py-3 font-semibold;
+}
+
+.activity-row-even {
+  @apply border-t border-gray-50 transition-colors;
+}
+
+.activity-row-even:hover {
+  @apply bg-[#1a1a6e]/[0.02];
+}
+
+.activity-row-odd {
+  @apply border-t border-gray-50 bg-gray-50/40 transition-colors;
+}
+
+.activity-row-odd:hover {
+  @apply bg-[#1a1a6e]/[0.02];
+}
+
+.activity-td-staff {
+  @apply px-7 py-4 font-bold text-[#1a1a6e] whitespace-nowrap;
+}
+
+.activity-td-name {
+  @apply px-4 py-4 font-semibold text-gray-800 whitespace-nowrap;
+}
+
+.activity-td-name-link {
+  @apply cursor-pointer transition-colors hover:text-[#e6a817] hover:underline active:text-[#1a1a6e];
+}
+
+.activity-td-action {
+  @apply px-4 py-4 text-gray-600;
+}
+
+.activity-td-year {
+  @apply px-4 py-4 text-gray-500 text-xs font-semibold whitespace-nowrap;
+}
+
+.activity-td-subject {
+  @apply font-semibold text-gray-800;
+}
+
+.activity-td-type {
+  @apply px-4 py-4;
+}
+
+.activity-td-date {
+  @apply px-4 py-4 text-gray-400 text-xs whitespace-nowrap;
+}
+
+/* ── Scan Document Button ── */
+.scan-btn {
+  @apply bg-[#e6a817] text-white text-xs font-bold tracking-wide uppercase px-5 py-2.5 rounded-lg shadow-sm transition-colors;
+}
+
+.scan-btn:hover {
+  @apply bg-[#cf9610];
+}
+
+/* ── Dashboard headings ── */
+.dash-heading {
+  @apply text-2xl font-black text-[#1a1a6e] tracking-tight;
+}
+
+.dash-sub {
+  @apply text-gray-400 text-sm mt-1;
+}
+
+/* ── Empty page placeholder ── */
+.empty-title {
+  @apply text-3xl font-black text-[#1a1a6e] tracking-tight mb-2;
+}
+
+.empty-sub {
+  @apply text-gray-400 text-sm;
+}
+
+.empty-accent {
+  @apply mt-4 h-0.5 w-12 bg-[#e6a817] rounded-full mx-auto;
+}
