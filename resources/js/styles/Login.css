@@ -143,3 +143,19 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.login-credit {
+  position: absolute;
+  bottom: 8px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.7);
+  z-index: 2;
+  margin: 0;
+}
+
+.login-credit a {
+  color: inherit;
+  text-decoration: underline;
+}
