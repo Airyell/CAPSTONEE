@@ -1,4 +1,3 @@
-
 import os
 import re
 import json
@@ -13,8 +12,6 @@ import cv2
 import numpy as np
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from paddleocr import PaddleOCR
-
 from document_classifier import (
     classify_document_type,
     get_document_types,
@@ -54,8 +51,10 @@ def classifier_status():
 # OCR CONFIGURATION
 # ============================================================
 
+# mkldnn (oneDNN) is OFF by default because it crashes inference on some
+# Paddle 3.x / CPU / Windows setups. Set OCR_ENABLE_MKLDNN=1 to turn it on.
 OCR_ENABLE_MKLDNN = (
-    os.environ.get("OCR_ENABLE_MKLDNN", "1") == "1"
+    os.environ.get("OCR_ENABLE_MKLDNN", "0") == "1"
 )
 
 try:
@@ -78,6 +77,20 @@ try:
 except Exception:
     OCR_MAX_SIZE = 2000
 
+# Scan only the top part of the page first (the student name and the
+# document title are almost always there). The full page is only scanned
+# if the name or the document type was not found. This roughly halves the
+# OCR time. Set OCR_UPPER_FIRST=0 to always scan the full page.
+OCR_UPPER_FIRST = os.environ.get("OCR_UPPER_FIRST", "1") == "1"
+
+try:
+    OCR_UPPER_FRACTION = min(
+        1.0,
+        max(0.25, float(os.environ.get("OCR_UPPER_FRACTION", "0.55")))
+    )
+except Exception:
+    OCR_UPPER_FRACTION = 0.55
+
 # Expensive image operations are opt-in. Enable only when a scan is poor.
 OCR_DESKEW = os.environ.get("OCR_DESKEW", "0") == "1"
 OCR_ENABLE_ENHANCED_FALLBACK = os.environ.get("OCR_ENABLE_ENHANCED_FALLBACK", "0") == "1"
@@ -91,8 +104,16 @@ OCR_TEXTLINE_ORIENTATION = (
 
 
 # ============================================================
-# PADDLEOCR
+# OCR ENGINE
 # ============================================================
+#
+# OCR_ENGINE=rapidocr  (default) -> ONNX Runtime. Fast on CPU and does not
+#                                   have the Paddle 3.x oneDNN crash.
+# OCR_ENGINE=paddle              -> original PaddleOCR 3.x engine.
+#
+# If rapidocr is not installed, the server falls back to PaddleOCR.
+
+OCR_ENGINE_NAME = os.environ.get("OCR_ENGINE", "rapidocr").strip().lower()
 
 OCR_DET_MODEL = os.environ.get(
     "OCR_DET_MODEL",
@@ -109,26 +130,27 @@ OCR_DOC_ORIENTATION = (
 )
 
 
-_COMMON_ENGINE_KWARGS = dict(
-    text_detection_model_name=OCR_DET_MODEL,
-    text_recognition_model_name=OCR_REC_MODEL,
-    device="cpu",
-    use_doc_orientation_classify=OCR_DOC_ORIENTATION,
-    use_doc_unwarping=False,
-    use_textline_orientation=OCR_TEXTLINE_ORIENTATION,
-    lang="en",
-)
+def _build_paddle_engine():
+    from paddleocr import PaddleOCR
 
+    common = dict(
+        text_detection_model_name=OCR_DET_MODEL,
+        text_recognition_model_name=OCR_REC_MODEL,
+        device="cpu",
+        use_doc_orientation_classify=OCR_DOC_ORIENTATION,
+        use_doc_unwarping=False,
+        use_textline_orientation=OCR_TEXTLINE_ORIENTATION,
+        lang="en",
+    )
 
-def _build_ocr_engine():
     attempts = [
         {
-            **_COMMON_ENGINE_KWARGS,
+            **common,
             "enable_mkldnn": OCR_ENABLE_MKLDNN,
             "cpu_threads": OCR_CPU_THREADS,
         },
         {
-            **_COMMON_ENGINE_KWARGS,
+            **common,
         },
         {
             "device": "cpu",
@@ -165,7 +187,69 @@ def _build_ocr_engine():
     )
 
 
-ocr_engine = _build_ocr_engine()
+def _build_rapid_engine():
+    """
+    Supports both package generations:
+    - rapidocr_onnxruntime (older, Python <= 3.12)
+    - rapidocr (newer)
+    """
+
+    try:
+        from rapidocr_onnxruntime import RapidOCR
+
+        print("[OCR] Initializing RapidOCR (rapidocr_onnxruntime)...")
+
+        try:
+            engine = RapidOCR(
+                intra_op_num_threads=OCR_CPU_THREADS,
+                inter_op_num_threads=1,
+            )
+
+        except Exception as exc:
+            print("[OCR] Could not set thread options:", exc)
+
+            engine = RapidOCR()
+
+        return engine, "rapidocr_onnxruntime"
+
+    except ImportError:
+        pass
+
+    from rapidocr import RapidOCR
+
+    print("[OCR] Initializing RapidOCR (rapidocr)...")
+
+    return RapidOCR(), "rapidocr"
+
+
+def _build_ocr_engine():
+    """
+    Returns (engine, backend_name).
+    """
+
+    if OCR_ENGINE_NAME != "paddle":
+        try:
+            engine, backend = _build_rapid_engine()
+
+            print(f"[OCR] RapidOCR ready ({backend}).")
+
+            return engine, backend
+
+        except ImportError:
+            print(
+                "[OCR] RapidOCR is not installed. "
+                "Run: pip install rapidocr-onnxruntime onnxruntime  "
+                "(falling back to PaddleOCR)"
+            )
+
+        except Exception as exc:
+            print("[OCR] RapidOCR failed to initialize:", exc)
+            print("[OCR] Falling back to PaddleOCR.")
+
+    return _build_paddle_engine(), "paddle"
+
+
+ocr_engine, OCR_BACKEND = _build_ocr_engine()
 
 # Prevent concurrent inference calls on the same OCR engine.
 ocr_lock = threading.Lock()
@@ -469,16 +553,10 @@ def prepare_image(image):
     return image
 
 
-
-<<<<<<< HEAD
-
-
 # ============================================================
 # OCR RESULT PARSING
 # ============================================================
 
-=======
->>>>>>> OCRback
 def safe_get(obj, key, default=None):
     """
     Safely retrieve a value from:
@@ -952,10 +1030,115 @@ def run_upper_name_ocr(image):
 # OCR RUNNER
 # ============================================================
 
+def _rapid_result_to_items(raw):
+    """
+    Convert RapidOCR output into the same item format used by the
+    rest of the pipeline: {"text", "score", "box"}.
+    """
+
+    items = []
+
+    if raw is None:
+        return items
+
+    # Newer `rapidocr` package returns an object with boxes/txts/scores.
+    if hasattr(raw, "txts"):
+        texts = raw.txts
+        scores = raw.scores
+        boxes = raw.boxes
+
+        if texts is None or boxes is None:
+            return items
+
+        triples = zip(boxes, texts, scores)
+
+    else:
+        # rapidocr_onnxruntime returns (result, elapsed).
+        result = raw[0] if isinstance(raw, tuple) else raw
+
+        if not result:
+            return items
+
+        triples = (
+            (entry[0], entry[1], entry[2])
+            for entry in result
+        )
+
+    for polygon, raw_text, raw_score in triples:
+        text = clean_text(raw_text)
+
+        if not text:
+            continue
+
+        try:
+            score = float(raw_score)
+        except (TypeError, ValueError):
+            score = 0.0
+
+        items.append(
+            {
+                "text": text,
+                "score": score,
+                "box": polygon_to_box(polygon),
+            }
+        )
+
+    return items
+
+
 def run_ocr(image):
     if image is None or image.size == 0:
         print("[OCR] Empty image received.")
         return []
+
+    if OCR_BACKEND != "paddle":
+        try:
+            prediction_start = time.perf_counter()
+
+            with ocr_lock:
+                if OCR_BACKEND == "rapidocr_onnxruntime":
+                    # Documents are upright, so the angle classifier
+                    # is skipped.
+                    raw = ocr_engine(image, use_cls=False)
+                else:
+                    raw = ocr_engine(image)
+
+            items = _rapid_result_to_items(raw)
+
+            breakdown = ""
+
+            if (
+                isinstance(raw, tuple)
+                and len(raw) > 1
+                and raw[1]
+            ):
+                try:
+                    breakdown = " (det/cls/rec: " + "/".join(
+                        f"{float(v):.1f}" for v in raw[1]
+                    ) + "s)"
+                except Exception:
+                    breakdown = ""
+
+            print(
+                f"[OCR] RapidOCR: {len(items)} detections in "
+                f"{time.perf_counter() - prediction_start:.2f}s"
+                f"{breakdown}"
+            )
+
+            return items
+
+        except Exception as exc:
+            print("")
+            print("================================================")
+            print("[OCR] RAPIDOCR PREDICTION ERROR")
+            print("================================================")
+            print(str(exc))
+
+            traceback.print_exc()
+
+            print("================================================")
+
+            return []
 
     try:
         prediction_start = time.perf_counter()
@@ -1185,19 +1368,12 @@ def find_owner_anchor(
                 candidates.append(item)
 
     if not candidates:
-<<<<<<< HEAD
-        print("[OWNER ANCHOR] No child-name section anchor found.")
-        return None
-
-    # Prefer the highest-confidence anchor.
-=======
         print(
             "[OWNER ANCHOR] No child-name section anchor found."
         )
 
         return None
 
->>>>>>> OCRback
     candidates.sort(
         key=lambda item: (
             item["box"][1],
@@ -1208,12 +1384,8 @@ def find_owner_anchor(
     selected = candidates[0]
 
     print(
-<<<<<<< HEAD
-        f"[OWNER ANCHOR] Selected: '{selected['text']}' "
-=======
         f"[OWNER ANCHOR] Selected: "
         f"'{selected['text']}' "
->>>>>>> OCRback
         f"box={selected['box']} "
         f"score={selected.get('score', 0):.3f}"
     )
@@ -1225,14 +1397,10 @@ def find_owner_anchor(
 # OWNER LABEL SELECTION
 # ============================================================
 
-<<<<<<< HEAD
-def select_owner_labels(items, owner_anchor=None):
-=======
 def select_owner_labels(
     items,
     owner_anchor=None
 ):
->>>>>>> OCRback
     """
     Select FIRST / MIDDLE / LAST labels belonging to
     the SAME NAME section.
@@ -1294,6 +1462,12 @@ def select_owner_labels(
             "lats",
             # Common OCR reading of the abbreviated Form 102 label "(Last)".
             "laat",
+            "lat",
+            "lasl",
+            "lasi",
+            "lest",
+            "lasr",
+            "lasd",
         }
 
         if t in last_variants:
@@ -1332,6 +1506,16 @@ def select_owner_labels(
                         best_type = label_type
 
             if best_score >= 0.86 and len(t) >= 4:
+                return best_type
+
+            # Short labels printed in parentheses, e.g. "(Lat)" for "(Last)".
+            # Slightly more tolerant, because parentheses make a name
+            # label far more likely than ordinary text.
+            if (
+                (text or "").strip().startswith("(")
+                and len(t) >= 3
+                and best_score >= 0.80
+            ):
                 return best_type
 
         except Exception:
@@ -1434,46 +1618,9 @@ def select_owner_labels(
             "LAST": None,
         }
 
-<<<<<<< HEAD
-    # ------------------------------------------------------------
-    # FILTER LABELS USING THE CHILD-NAME SECTION ANCHOR
-    # ------------------------------------------------------------
-
-    if owner_anchor and owner_anchor.get("box"):
-        anchor_box = owner_anchor["box"]
-        anchor_bottom = anchor_box[3]
-
-        anchor_filtered_labels = []
-
-        for label in labels:
-            label_center_y = box_center(label["box"])[1]
-
-            # Only consider name-field labels at or below
-            # the child-name section heading.
-            if label_center_y >= anchor_bottom - 10:
-                anchor_filtered_labels.append(label)
-
-        if anchor_filtered_labels:
-            labels = anchor_filtered_labels
-
-            print(
-                f"[OWNER LABELS] Using child-name anchor. "
-                f"Remaining labels: {len(labels)}"
-            )
-        else:
-            print(
-                "[OWNER LABELS] No labels below child-name anchor. "
-                "Using all detected labels as fallback."
-            )
-
-    # ------------------------------------------------------------
-    # 2. Print all detected labels
-    # ------------------------------------------------------------
-=======
     # --------------------------------------------------------
     # 2. Filter labels using child section anchor
     # --------------------------------------------------------
->>>>>>> OCRback
 
     anchor_bottom = None
     anchor_center_y = None
@@ -1810,24 +1957,6 @@ def select_owner_labels(
             }
         )
 
-<<<<<<< HEAD
-    
-    # ------------------------------------------------------------
-    # 7. If complete rows exist, select the closest complete row
-    #    below the child-name section anchor.
-    # ------------------------------------------------------------
-
-    if complete_rows:
-        if owner_anchor and owner_anchor.get("box"):
-            anchor_bottom = owner_anchor["box"][3]
-
-            complete_rows.sort(
-                key=lambda x: max(
-                    0,
-                    x["row"]["y"] - anchor_bottom
-                )
-            )
-=======
     # --------------------------------------------------------
     # 8. Select the closest complete row below child anchor
     # --------------------------------------------------------
@@ -1861,7 +1990,6 @@ def select_owner_labels(
                     )
                 )
 
->>>>>>> OCRback
         else:
             complete_rows.sort(
                 key=lambda x: x["row"]["y"]
@@ -1870,14 +1998,10 @@ def select_owner_labels(
         selected = complete_rows[0]
 
         print("\n[OWNER NAME SECTION]")
-<<<<<<< HEAD
-        print(f"Complete name rows found: {len(complete_rows)}")
-=======
 
         print(
             f"Complete name rows found: {len(complete_rows)}"
         )
->>>>>>> OCRback
 
         for candidate in complete_rows:
             print(
@@ -1887,10 +2011,6 @@ def select_owner_labels(
                 f"score={candidate['score_sum']:.3f}"
             )
 
-<<<<<<< HEAD
-        print("\n[SELECTED OWNER NAME LABEL GROUP]")
-        print(f"Row {selected['index']} y={selected['row']['y']:.1f}")
-=======
         print(
             "\n[SELECTED OWNER NAME LABEL GROUP]"
         )
@@ -1899,7 +2019,6 @@ def select_owner_labels(
             f"Row {selected['index']} "
             f"y={selected['row']['y']:.1f}"
         )
->>>>>>> OCRback
 
         for key in (
             "FIRST",
@@ -1919,135 +2038,14 @@ def select_owner_labels(
             "LAST": selected["LAST"],
         }
 
-<<<<<<< HEAD
-    # ------------------------------------------------------------
-    # 8. Fallback
-    #
-    # If no complete row exists, select the row containing the
-    # largest number of recognized name labels.
-    # ------------------------------------------------------------
-
-    print("\n[OWNER LABELS] No complete FIRST/MIDDLE/LAST row found.")
-
-    usable_rows = [
-        row
-        for row in rows
-        if len(row["labels"]) >= 2
-    ]
-
-    if usable_rows:
-        if owner_anchor and owner_anchor.get("box"):
-            anchor_bottom = owner_anchor["box"][3]
-
-            usable_rows.sort(
-                key=lambda row: (
-                    -len(row["labels"]),
-                    max(0, row["y"] - anchor_bottom)
-                )
-            )
-        else:
-            usable_rows.sort(
-                key=lambda row: (
-                    -len(row["labels"]),
-                    row["y"]
-                )
-            )
-
-        selected_row = usable_rows[0]
-
-        result = {
-            "FIRST": None,
-            "MIDDLE": None,
-            "LAST": None,
-        }
-
-        for label in selected_row["labels"]:
-            label_type = label.get("type")
-
-            if label_type in result:
-                result[label_type] = label
-
-        print(
-            f"[OWNER LABELS] Fallback row "
-            f"y={selected_row['y']:.1f} "
-            f"labels={list(result.keys())}"
-        )
-
-        return result
-
-    print("[OWNER LABELS] No usable fallback row found.")
-
-    return {
-        "FIRST": None,
-        "MIDDLE": None,
-        "LAST": None,
-    }
-
-
-    # ------------------------------------------------------------
-    # 8. Fallback
-    #
-    # If the document does not produce a complete row, prefer a
-    # row containing the largest number of recognized name labels
-    # (uppermost on ties) rather than mixing different sections.
-    # ------------------------------------------------------------
-=======
     # --------------------------------------------------------
     # 9. Strict fallback
     # --------------------------------------------------------
->>>>>>> OCRback
 
     print(
         "\n[OWNER LABELS] No complete name row found."
     )
 
-<<<<<<< HEAD
-    if rows:
-        usable_rows = [
-            row
-            for row in rows
-            if len(row["labels"]) >= 2
-        ]
-
-    if owner_anchor and owner_anchor.get("box"):
-        anchor_bottom = owner_anchor["box"][3]
-
-        usable_rows.sort(
-                key=lambda row: (
-                    -len(row["labels"]),
-                    max(0, row["y"] - anchor_bottom)
-                )
-            )
-    else:
-            usable_rows.sort(
-                    key=lambda row: (
-                        -len(row["labels"]),
-                        row["y"]
-                    )
-                )
-
-            selected_row = usable_rows[0]
-
-            result = {
-                "FIRST": None,
-                "MIDDLE": None,
-                "LAST": None,
-            }
-
-            for label in selected_row["labels"]:
-                label_type = label.get("type")
-
-                if label_type in result:
-                    result[label_type] = label
-
-            print(
-                f"[OWNER LABELS] "
-                f"Fallback row y={selected_row['y']:.1f} "
-                f"labels={list(result.keys())}"
-            )
-
-            return result
-=======
     if owner_anchor:
         print(
             "[OWNER LABELS] Strict mode: "
@@ -2058,7 +2056,6 @@ def select_owner_labels(
             "[OWNER LABELS] No complete name row. "
             "Partial name extraction is disabled."
         )
->>>>>>> OCRback
 
     return {
         "FIRST": None,
@@ -2070,7 +2067,6 @@ def select_owner_labels(
 # ============================================================
 # VALUE EXTRACTION
 # ============================================================
-
 
 def find_value_items(
     items,
@@ -2085,18 +2081,6 @@ def find_value_items(
         return []
 
     lx1, ly1, lx2, ly2 = label_box
-<<<<<<< HEAD
-    label_h = max(1.0, box_height(label_box))
-    label_cx, label_cy = box_center(label_box)
-
-    candidates = []
-
-    is_middle = label is selected_other_labels.get("MIDDLE")
-
-    for item in items:
-        box = item.get("box")
-        text = clean_text(item.get("text", ""))
-=======
 
     label_h = max(
         1.0,
@@ -2119,26 +2103,18 @@ def find_value_items(
         text = clean_text(
             item.get("text", "")
         )
->>>>>>> OCRback
 
         if box is None or not text:
             continue
 
-<<<<<<< HEAD
-        # Never use another name label or form label as a name.
-        if classify_label(text) or is_non_name_field_text(text):
-=======
         if (
             classify_label(text)
             or is_non_name_field_text(text)
         ):
->>>>>>> OCRback
             continue
 
         cx, cy = box_center(box)
 
-<<<<<<< HEAD
-=======
         # Never search beyond the child-name section.
         if (
             section_bottom is not None
@@ -2146,22 +2122,12 @@ def find_value_items(
         ):
             continue
 
->>>>>>> OCRback
         # The value must be below its own field label.
         if cy <= ly2:
             continue
 
         distance_y = cy - ly2
 
-<<<<<<< HEAD
-        # Keep the middle-name search area especially tight.
-                # Keep the middle-name search area very strict.
-        # A middle-name value must be close to its own label.
-        if is_middle:
-            max_vertical_distance = max(18.0, label_h * 1.0)
-        else:
-            max_vertical_distance = max(48.0, label_h * 3.2)
-=======
         if is_middle:
             max_vertical_distance = max(
                 18.0,
@@ -2172,24 +2138,10 @@ def find_value_items(
                 48.0,
                 label_h * 3.2
             )
->>>>>>> OCRback
 
         if distance_y > max_vertical_distance:
             continue
 
-<<<<<<< HEAD
-        # The candidate must be horizontally close to its label.
-        overlap = horizontal_overlap(box, label_box)
-        candidate_width = max(1.0, box_width(box))
-
-        if is_middle:
-            # Middle-name text must be horizontally aligned
-            # with the MIDDLE label itself.
-            if overlap <= 0:
-                continue
-
-            overlap_ratio = overlap / candidate_width
-=======
         overlap = horizontal_overlap(
             box,
             label_box
@@ -2207,16 +2159,10 @@ def find_value_items(
             overlap_ratio = (
                 overlap / candidate_width
             )
->>>>>>> OCRback
 
             if overlap_ratio < 0.30:
                 continue
 
-<<<<<<< HEAD
-            # Reject text whose center is far outside the
-            # horizontal area of the MIDDLE label.
-=======
->>>>>>> OCRback
             allowed_horizontal_margin = max(
                 10.0,
                 box_width(label_box) * 0.15
@@ -2235,13 +2181,6 @@ def find_value_items(
 
                 if cx > lx2 + candidate_width * 0.35:
                     continue
-<<<<<<< HEAD
-        # Do not allow another field to claim this candidate.
-        belongs_to_other = False
-
-        for other_field, other_label in selected_other_labels.items():
-            if other_label is None or other_label is label:
-=======
 
         # Do not allow another field to claim this candidate.
         belongs_to_other = False
@@ -2253,7 +2192,6 @@ def find_value_items(
                 other_label is None
                 or other_label is label
             ):
->>>>>>> OCRback
                 continue
 
             other_box = other_label.get("box")
@@ -2263,10 +2201,6 @@ def find_value_items(
 
             other_cx, _ = box_center(other_box)
 
-<<<<<<< HEAD
-            current_distance = abs(cx - label_cx)
-            other_distance = abs(cx - other_cx)
-=======
             current_distance = abs(
                 cx - label_cx
             )
@@ -2274,7 +2208,6 @@ def find_value_items(
             other_distance = abs(
                 cx - other_cx
             )
->>>>>>> OCRback
 
             if other_distance < current_distance * 0.55:
                 belongs_to_other = True
@@ -2283,12 +2216,6 @@ def find_value_items(
         if belongs_to_other:
             continue
 
-<<<<<<< HEAD
-        horizontal_distance = abs(cx - label_cx)
-
-        vertical_score = 1.0 / (1.0 + distance_y)
-        horizontal_score = 1.0 / (1.0 + horizontal_distance)
-=======
         horizontal_distance = abs(
             cx - label_cx
         )
@@ -2300,22 +2227,22 @@ def find_value_items(
         horizontal_score = (
             1.0 / (1.0 + horizontal_distance)
         )
->>>>>>> OCRback
 
         geometry_score = (
             vertical_score * 0.65
             + horizontal_score * 0.35
         )
 
-        candidates.append({
-            **item,
-            "distance_y": distance_y,
-            "distance_x": horizontal_distance,
-            "geometry_score": geometry_score,
-        })
+        candidates.append(
+            {
+                **item,
+                "distance_y": distance_y,
+                "distance_x": horizontal_distance,
+                "geometry_score": geometry_score,
+            }
+        )
 
     return candidates
-
 
 
 def choose_one_value_line(candidates):
@@ -2609,10 +2536,6 @@ def choose_one_value_line(candidates):
     return " ".join(parts).strip()
 
 
-<<<<<<< HEAD
-
-=======
->>>>>>> OCRback
 def is_valid_middle_name_value(value):
     text = clean_name(value)
 
@@ -2622,16 +2545,10 @@ def is_valid_middle_name_value(value):
     if is_non_name_field_text(text):
         return False
 
-<<<<<<< HEAD
-    # Middle names should contain letters only.
-    # Reject numbers and mixed form-field content.
-    if any(char.isdigit() for char in text):
-=======
     if any(
         char.isdigit()
         for char in text
     ):
->>>>>>> OCRback
         return False
 
     words = text.split()
@@ -2639,15 +2556,10 @@ def is_valid_middle_name_value(value):
     if not words or len(words) > 4:
         return False
 
-<<<<<<< HEAD
-    # Reject single-character OCR fragments.
-    if any(len(word) < 2 for word in words):
-=======
     if any(
         len(word) < 2
         for word in words
     ):
->>>>>>> OCRback
         return False
 
     if not all(
@@ -2716,11 +2628,6 @@ def extract_owner_name(
 ):
     image_height, image_width = image.shape[:2]
 
-<<<<<<< HEAD
-        # Detect the child-name section first so label selection
-    # can use it as a reference.
-    owner_anchor = find_owner_anchor(items)
-=======
     owner_anchor = find_owner_anchor(
         items,
         allow_form102_anchor=strict_child_section
@@ -2754,12 +2661,6 @@ def extract_owner_name(
         )
         if owner_anchor
         else None
-    )
->>>>>>> OCRback
-
-    selected = select_owner_labels(
-        items,
-        owner_anchor=owner_anchor
     )
 
     print("")
@@ -2851,18 +2752,11 @@ def extract_owner_name(
                 continue
 
             if field == "MIDDLE":
-<<<<<<< HEAD
-                if not is_valid_middle_name_value(text_value):
-                    continue
-
-            # Reject form labels, dates, and unrelated fields.
-=======
                 if not is_valid_middle_name_value(
                     text_value
                 ):
                     continue
 
->>>>>>> OCRback
             if is_non_name_field_text(text_value):
                 continue
 
@@ -2980,36 +2874,12 @@ def extract_owner_name(
                 f"final={best_score:.4f}"
             )
 
-<<<<<<< HEAD
-        # Fallback is initialized for EVERY field. It cannot
-        # cause an UnboundLocalError when no candidate exists.
-                # --------------------------------------------------------
-        # FALLBACK
-        #
-        # FIRST and LAST may use the existing line-based fallback.
-        # MIDDLE must NOT use this fallback because it can select
-        # unrelated text from another field.
-        # --------------------------------------------------------
-
-        if not selected_value and field == "MIDDLE":
-            print(
-                "[MIDDLE] No confidently identified middle name. "
-                "Keeping the value blank."
-            )
-
-            selected_value = ""
-
-        elif not selected_value:
-            fallback_value = choose_one_value_line(candidates)
-            fallback_value = clean_name(fallback_value)
-=======
         # ----------------------------------------------------
         # FALLBACK
         #
         # MIDDLE must remain blank if it cannot be confidently
         # identified. Do not use generic fallback for it.
         # ----------------------------------------------------
->>>>>>> OCRback
 
         if not selected_value and field == "MIDDLE":
             print(
@@ -3146,11 +3016,19 @@ NAME_LABEL_RE = re.compile(
 )
 
 
+NOT_PERSON_NAME_LABEL_RE = re.compile(
+    r"^\s*NAME\s*(?:OF|AND|IN)\s*"
+    r"(?:SCHOOL|TEACHER|ADVISER|ADVISOR|PRINCIPAL|HEAD|INSTITUTION|"
+    r"COMMUNITY|ADDRESS|PRINT|PARENT|GUARDIAN|MOTHER|FATHER|"
+    r"INFORMANT|CENTER|HOSPITAL|CLINIC)",
+    re.IGNORECASE,
+)
+
+
 COMMA_NAME_RE = re.compile(
     r"^([A-Za-zÀ-ÿ'\-]+(?: [A-Za-zÀ-ÿ'\-]+)?),\s*"
     r"([A-Za-zÀ-ÿ'\-]+(?: [A-Za-zÀ-ÿ'\-]+)*)\.?\s*([A-Za-zÀ-ÿ'\-\.]*)$"
 )
-
 
 
 def _split_full_name(full):
@@ -3165,17 +3043,11 @@ def _split_full_name(full):
         first_name = match.group(2).strip()
         last_name = match.group(1).strip()
 
-<<<<<<< HEAD
-        # Do not assume that unstructured text contains
-        # a verified middle name.
-        return first_name, "", last_name
-=======
         return (
             first_name,
             "",
             last_name
         )
->>>>>>> OCRback
 
     parts = full.split()
 
@@ -3183,14 +3055,6 @@ def _split_full_name(full):
         return parts[0], "", ""
 
     if len(parts) == 2:
-<<<<<<< HEAD
-        return parts[0], "", parts[1]
-
-    # Without separate FIRST / MIDDLE / LAST labels,
-    # do not guess which word is the middle name.
-    return " ".join(parts[:-1]), "", parts[-1]
-
-=======
         return (
             parts[0],
             "",
@@ -3202,7 +3066,6 @@ def _split_full_name(full):
         "",
         parts[-1]
     )
->>>>>>> OCRback
 
 
 def extract_name_generic(items):
@@ -3229,6 +3092,13 @@ def extract_name_generic(items):
         )
 
         if not match:
+            continue
+
+        # Skip "Name of School", "Name of Teacher/Adviser",
+        # "Name and Address of ...", "Name in Print", etc.
+        if NOT_PERSON_NAME_LABEL_RE.match(
+            item["text"]
+        ):
             continue
 
         value = clean_name(
@@ -3298,6 +3168,170 @@ def extract_name_generic(items):
         if best:
             return _split_full_name(best)
 
+    # No "NAME:" label worked: try the extra strategies.
+    return extract_name_extra(items)
+
+# ============================================================
+# EXTRA NAME EXTRACTION (Good Moral, Form 137, certifications)
+# ============================================================
+
+_FIELD_LABEL_RE = re.compile(
+    r"\b(LAST|FAMILY|FIRST|GIVEN|MIDDLE)\s*NAME\b|\bSURNAME\b",
+    re.IGNORECASE,
+)
+
+_CERTIFY_COMMA_RE = re.compile(
+    r"(?i:certif(?:y|ies)(?:\s+that)?)\s+(?:(?:MR|MS|MRS)\.?\s+)?"
+    r"([A-ZÑ][A-Za-zÀ-ÿ'\-]+(?:\s[A-ZÑ][A-Za-zÀ-ÿ'\-]+)?\s*,\s*"
+    r"[A-ZÑ][A-Za-zÀ-ÿ'\-]+(?:\s+[A-ZÑ][A-Za-zÀ-ÿ'\-]+)*(?:\s+[A-Z]\.?)?)"
+)
+
+_CERTIFY_PLAIN_RE = re.compile(
+    r"(?i:certify\s+that)\s+(?:(?:MR|MS|MRS)\.?\s+)?"
+    r"((?:[A-ZÑ][A-Za-zÀ-ÿ'\-]*\.?\s+){1,4}[A-ZÑ][A-Za-zÀ-ÿ'\-]*\.?)"
+    r"(?=\s+[a-z])"
+)
+
+
+def _field_kind(label_text):
+    t = label_text.upper()
+    if t.startswith(("LAST", "FAMILY", "SURNAME")):
+        return "last"
+    if t.startswith(("FIRST", "GIVEN")):
+        return "first"
+    return "middle"
+
+
+def _clean_field_value(value):
+    # Stop at "NAME EXTN. (Jr, Sr)" or any bracket.
+    value = re.split(
+        r"NAME\s*EXTN|EXTENSION|\(", value or "", flags=re.IGNORECASE
+    )[0]
+    return clean_name(value)
+
+
+def _neighbor_value(item, boxed):
+    lb = item["box"]
+    lh = max(1.0, box_height(lb))
+    best, best_d = "", 1e9
+
+    for other in boxed:
+        if other is item or not other.get("box"):
+            continue
+        if _FIELD_LABEL_RE.search(other["text"]):
+            continue
+
+        ob = other["box"]
+        text = _clean_field_value(other["text"])
+
+        if sum(c.isalpha() for c in text) < 2:
+            continue
+
+        same_row = vertical_overlap(lb, ob) > lh * 0.5 and ob[0] >= lb[2] - 5
+        below = 0 < ob[1] - lb[3] < lh * 2.5 and horizontal_overlap(lb, ob) > 0
+
+        if not (same_row or below):
+            continue
+
+        d = abs(ob[0] - lb[2]) + abs(ob[1] - lb[1])
+        if d < best_d:
+            best, best_d = text, d
+
+    return best
+
+
+def _reading_order_text(items):
+    boxed = [i for i in items if i.get("box") and i.get("text")]
+    boxed.sort(key=lambda i: box_center(i["box"])[1])
+
+    lines = []
+    for item in boxed:
+        cy = box_center(item["box"])[1]
+        h = max(1.0, box_height(item["box"]))
+        for line in lines:
+            if abs(cy - line["cy"]) <= max(h, line["h"]) * 0.6:
+                line["items"].append(item)
+                line["cy"] = (line["cy"] + cy) / 2.0
+                line["h"] = max(line["h"], h)
+                break
+        else:
+            lines.append({"cy": cy, "h": h, "items": [item]})
+
+    lines.sort(key=lambda l: l["cy"])
+
+    return " ".join(
+        i["text"]
+        for line in lines
+        for i in sorted(line["items"], key=lambda i: i["box"][0])
+    )
+
+
+def _split_comma_name(raw):
+    """'DADES, ARIELLE V.' -> (first, middle, last). A lone initial is
+    dropped so student matching can compare first + last name."""
+    last, _, rest = raw.partition(",")
+    last = clean_name(last)
+    words = clean_name(rest).split()
+
+    if len(words) > 1 and len(words[-1]) == 1:
+        words = words[:-1]
+
+    return " ".join(words), "", last
+
+
+def extract_name_extra(items):
+    """
+    Extra name strategies for non-birth-certificate documents:
+      1. LAST NAME / FIRST NAME / MIDDLE NAME labels (Form 137, forms)
+      2. 'This is to certify that LAST, FIRST M. has ...' sentences
+         (Good Moral, certifications)
+    Returns (first, middle, last) or ("", "", "").
+    """
+    boxed = [i for i in items if i.get("text")]
+
+    # --- 1. Labeled fields ---
+    found = {}
+
+    for item in boxed:
+        text = item["text"]
+        matches = list(_FIELD_LABEL_RE.finditer(text))
+
+        for n, m in enumerate(matches):
+            kind = _field_kind(m.group(0))
+
+            if kind in found:
+                continue
+
+            end = matches[n + 1].start() if n + 1 < len(matches) else len(text)
+            value = _clean_field_value(text[m.end():end].lstrip(" :;.-"))
+
+            if not value and n == len(matches) - 1 and item.get("box"):
+                value = _neighbor_value(item, boxed)
+
+            if len(value) >= 2 and not is_non_name_field_text(value):
+                found[kind] = value
+
+    if found.get("first") and found.get("last"):
+        middle = found.get("middle", "")
+        if len(middle) == 1:
+            middle = ""
+        return found["first"], middle, found["last"]
+
+    # --- 2. "certify that ..." sentence ---
+    text = _reading_order_text(items) or " ".join(i["text"] for i in boxed)
+
+    m = _CERTIFY_COMMA_RE.search(text)
+    if m:
+        return _split_comma_name(m.group(1))
+
+    m = _CERTIFY_PLAIN_RE.search(text)
+    if m:
+        words = [w for w in clean_name(m.group(1)).split() if w]
+        if len(words) >= 2:
+            if len(words) > 2 and len(words[-2]) == 1:
+                del words[-2]
+            return " ".join(words[:-1]), "", words[-1]
+
     return "", "", ""
 
 
@@ -3305,16 +3339,18 @@ def extract_name_generic(items):
 # BIRTH CERTIFICATE IDENTIFICATION
 # ============================================================
 
+def compact_text(text):
+    """Uppercase letters and digits only (ignores spaces/punctuation)."""
+    return re.sub(r"[^A-Z0-9]", "", str(text or "").upper())
+
+
 def is_birth_certificate_document(
     classification,
     raw_text=""
 ):
     """
     Identify birth certificates using both classifier result
-    and OCR text.
-
-    This determines whether strict child-name extraction
-    should be enabled.
+    and OCR text, ignoring spaces (RapidOCR often drops them).
     """
 
     if not isinstance(classification, dict):
@@ -3328,24 +3364,18 @@ def is_birth_certificate_document(
         classification.get("header_text", "") or "",
     ]
 
-    combined = normalize_text(
-        " ".join(
-            map(str, values)
-        )
-    )
+    combined = compact_text(" ".join(map(str, values)))
 
     patterns = [
-        "BIRTH CERTIFICATE",
-        "CERTIFICATE OF LIVE BIRTH",
-        "LIVE BIRTH",
-        "FORM 102",
-        "CERTIFICATE OF BIRTH",
+        "BIRTHCERTIFICATE",
+        "CERTIFICATEOFLIVEBIRTH",
+        "CERTIFICATIONOFLIVEBIRTH",
+        "LIVEBIRTH",
+        "FORM102",
+        "CERTIFICATEOFBIRTH",
     ]
 
-    return any(
-        pattern in combined
-        for pattern in patterns
-    )
+    return any(pattern in combined for pattern in patterns)
 
 
 # ============================================================
@@ -3384,42 +3414,6 @@ def extract_document(image_path):
     # INITIAL FULL-PAGE OCR
     # --------------------------------------------------------
 
-    ocr_start = time.perf_counter()
-
-    items = run_ocr(image)
-
-    initial_raw_text = " ".join(
-        item.get("text", "")
-        for item in items
-    ).strip()
-
-    initial_classification = classify_document_type(
-        initial_raw_text,
-        items,
-        h
-    )
-
-    strict_child_extraction = (
-        is_birth_certificate_document(
-            initial_classification,
-            initial_raw_text
-        )
-    )
-
-    print(
-        "[NAME EXTRACTION MODE]",
-        "STRICT"
-        if strict_child_extraction
-        else "GENERIC DOCUMENT MODE"
-    )
-
-    ocr_seconds = (
-        time.perf_counter() - ocr_start
-    )
-
-    upper_ocr_seconds = 0.0
-    enhanced_ocr_seconds = 0.0
-
     def sorted_boxed_items(source_items):
         result_items = [
             item
@@ -3436,96 +3430,136 @@ def extract_document(image_path):
 
         return result_items
 
-    # --------------------------------------------------------
-    # INITIAL NAME EXTRACTION
-    # --------------------------------------------------------
+    def analyze_items(source_items):
+        """
+        Classify the document and extract the owner name
+        from one set of OCR detections.
+        """
 
-    name_start = time.perf_counter()
+        raw = " ".join(
+            item.get("text", "")
+            for item in source_items
+        ).strip()
 
-    owner_name = extract_owner_name(
-        image,
-        items,
-        strict_child_section=strict_child_extraction
-    )
-
-    name_source = "owner_labels"
-
-    # Generic extraction is only allowed for non-birth documents.
-    if (
-        not strict_child_extraction
-        and not (
-            owner_name["first_name"]
-            and owner_name["last_name"]
-        )
-    ):
-        first, middle, last = extract_name_generic(
-            items
+        classification = classify_document_type(
+            raw,
+            source_items,
+            h
         )
 
-        if first and last:
-            owner_name["first_name"] = (
-                owner_name["first_name"] or first
-            )
-
-            owner_name["middle_name"] = (
-                owner_name["middle_name"] or middle
-            )
-
-            owner_name["last_name"] = (
-                owner_name["last_name"] or last
-            )
-
-            name_source = "generic_label"
-    
-    # ----------------------------------------------------
-    # ENHANCED OCR FALLBACK
-    # Run only if the original OCR did not identify
-    # both the first name and last name.
-    # ----------------------------------------------------
-
-    enhanced_ocr_seconds = 0.0
-
-    if not (owner_name["first_name"] and owner_name["last_name"]):
-        print("\n[ENHANCED OCR] Running enhanced image pass...")
-
-        enhanced_start = time.time()
-
-        enhanced_image = enhance_image_for_ocr(image)
-
-        if enhanced_image is not None:
-            enhanced_items = run_ocr(enhanced_image)
-
-            if enhanced_items:
-                items = merge_ocr_items(items, enhanced_items)
-
-                owner_name = extract_owner_name(image, items)
-                name_source = "enhanced_owner_labels"
-
-                if not (
-                    owner_name["first_name"]
-                    and owner_name["last_name"]
-                ):
-                    f, m, l = extract_name_generic(items)
-
-                    if f and l:
-                        owner_name["first_name"] = (
-                            owner_name["first_name"] or f
-                        )
-                        owner_name["last_name"] = (
-                            owner_name["last_name"] or l
-                        )
-
-                        # Do not populate middle name through
-                        # generic full-name inference.
-                        name_source = "enhanced_generic_label"
-
-        enhanced_ocr_seconds = time.time() - enhanced_start
+        strict = is_birth_certificate_document(
+            classification,
+            raw
+        )
 
         print(
-            f"[ENHANCED OCR] Completed in "
-            f"{enhanced_ocr_seconds:.3f} seconds."
+            "[NAME EXTRACTION MODE]",
+            "STRICT"
+            if strict
+            else "GENERIC DOCUMENT MODE"
         )
 
+        owner = extract_owner_name(
+            image,
+            source_items,
+            strict_child_section=strict
+        )
+
+        source = "owner_labels"
+
+        # Generic extraction is only allowed for non-birth documents.
+        if (
+            not strict
+            and not (
+                owner["first_name"]
+                and owner["last_name"]
+            )
+        ):
+            first, middle, last = extract_name_generic(
+                source_items
+            )
+
+            if first and last:
+                owner["first_name"] = (
+                    owner["first_name"] or first
+                )
+
+                owner["middle_name"] = (
+                    owner["middle_name"] or middle
+                )
+
+                owner["last_name"] = (
+                    owner["last_name"] or last
+                )
+
+                source = "generic_label"
+
+        return classification, strict, owner, source
+
+    ocr_start = time.perf_counter()
+
+    items = None
+    analysis = None
+
+    if OCR_UPPER_FIRST and OCR_BACKEND != "paddle":
+        crop_bottom = max(
+            1,
+            int(h * OCR_UPPER_FRACTION)
+        )
+
+        print(
+            f"[OCR] Quick pass: scanning top "
+            f"{int(OCR_UPPER_FRACTION * 100)}% of the page "
+            f"({w} x {crop_bottom})"
+        )
+
+        # The crop starts at y=0, so box coordinates are identical
+        # to full-page coordinates and need no shifting.
+        quick_items = run_ocr(image[0:crop_bottom, 0:w])
+
+        if quick_items:
+            quick_analysis = analyze_items(quick_items)
+
+            quick_classification, _, quick_owner, _ = quick_analysis
+
+            quick_ok = bool(
+                quick_owner["first_name"]
+                and quick_owner["last_name"]
+                and quick_classification.get("document_id") is not None
+            )
+
+            if quick_ok:
+                items = quick_items
+                analysis = quick_analysis
+
+                print("[OCR] Quick pass succeeded. Skipping full page.")
+
+            else:
+                print(
+                    "[OCR] Quick pass incomplete "
+                    "(name or document type missing). "
+                    "Scanning the full page."
+                )
+
+    if items is None:
+        items = run_ocr(image)
+        analysis = analyze_items(items)
+
+    (
+        initial_classification,
+        strict_child_extraction,
+        owner_name,
+        name_source,
+    ) = analysis
+
+    ocr_seconds = (
+        time.perf_counter() - ocr_start
+    )
+
+    upper_ocr_seconds = 0.0
+    enhanced_ocr_seconds = 0.0
+
+    name_start = time.perf_counter()
 
     # --------------------------------------------------------
     # ENHANCED OCR FALLBACK
@@ -3538,7 +3572,7 @@ def extract_document(image_path):
         if OCR_VERBOSE:
             print("\n[ENHANCED OCR] Running enhanced image pass...")
 
-        enhanced_start = time.time()
+        enhanced_start = time.perf_counter()
 
         enhanced_image = enhance_image_for_ocr(
             image
@@ -3645,7 +3679,7 @@ def extract_document(image_path):
             and owner_name["last_name"]
         )
     ):
-        upper_start = time.time()
+        upper_start = time.perf_counter()
 
         upper_items = run_upper_name_ocr(
             image
@@ -3745,6 +3779,18 @@ def extract_document(image_path):
         h
     )
 
+    print(
+        "[CLASSIFIER] type =", document_classification["document_type"],
+        "| id =", document_classification["document_id"],
+        "| source =", document_classification["document_type_source"],
+        "| score =", document_classification["document_type_score"],
+    )
+    print("[CLASSIFIER] header:", document_classification["header_text"])
+    print(
+        "[CLASSIFIER] suggestions:",
+        document_classification["document_type_suggestions"],
+    )
+
     total_seconds = (
         time.perf_counter() - start
     )
@@ -3783,13 +3829,6 @@ def extract_document(image_path):
         "ocr_items": len(ordered_items),
 
         "timing": {
-<<<<<<< HEAD
-            "full_ocr_seconds": round(ocr_seconds, 3),
-            "enhanced_ocr_seconds": round(enhanced_ocr_seconds, 3),
-            "upper_ocr_seconds": round(upper_ocr_seconds, 3),
-            "name_extraction_seconds": round(name_seconds, 3),
-            "total_seconds": round(total_seconds, 3),
-=======
             "full_ocr_seconds": round(
                 ocr_seconds,
                 3
@@ -3814,7 +3853,6 @@ def extract_document(image_path):
                 total_seconds,
                 3
             ),
->>>>>>> OCRback
         },
 
         "debug": {
@@ -3993,7 +4031,7 @@ if __name__ == "__main__":
     print("================================================")
 
     print(
-        "Build  : 2026-11-02 updated OCR"
+        "Build  : 2026-11-07 RapidOCR + quick top-of-page pass"
     )
 
     print(
@@ -4013,7 +4051,9 @@ if __name__ == "__main__":
     )
 
     print("Mode   : Strict child extraction for birth certificates")
-    print(f"Fast   : max_size={OCR_MAX_SIZE}, cpu_threads={OCR_CPU_THREADS}, mkldnn={OCR_ENABLE_MKLDNN}")
+    print(f"Engine : {OCR_BACKEND}")
+    print(f"Quick  : upper_first={OCR_UPPER_FIRST}, fraction={OCR_UPPER_FRACTION}")
+    print(f"Fast   : max_size={OCR_MAX_SIZE}, cpu_threads={OCR_CPU_THREADS}, mkldnn={OCR_ENABLE_MKLDNN} (paddle only)")
     print(f"Fallbacks: enhanced={OCR_ENABLE_ENHANCED_FALLBACK}, upper={OCR_ENABLE_UPPER_FALLBACK}, deskew={OCR_DESKEW}")
 
     print("================================================")

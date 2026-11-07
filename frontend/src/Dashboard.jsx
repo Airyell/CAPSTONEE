@@ -227,19 +227,19 @@ export default function Dashboard({
 // ------------------------------------------------------------
 
   const handleDocumentUpload = async (event) => {
-  const file = event.target.files?.[0];
+    const files = Array.from(event.target.files || []);
 
-  // Allow selecting the same file again later.
-  event.target.value = "";
+    // Allow selecting the same files again later.
+    event.target.value = "";
 
-  if (!file) return;
+    if (!files.length) return;
 
-  try {
-    await scanner.upload(file);
-  } catch (error) {
-    console.error("Document upload failed:", error);
-  }
-};
+    try {
+      await scanner.upload(files);
+    } catch (error) {
+      console.error("Document upload failed:", error);
+    }
+  };
 
   const scanner = useDocumentScanner({
     onScanned: (credential, result) => {
@@ -437,7 +437,7 @@ export default function Dashboard({
             remarks: "Verified",
           });
 
-        if (insertError) {
+                if (insertError) {
   console.error("[DATABASE INSERT ERROR]", {
     message: insertError.message,
     details: insertError.details,
@@ -447,25 +447,6 @@ export default function Dashboard({
 
   throw insertError;
 }
-
-  // ------------------------------------------------------------
-// HANDLE UPLOADED DOCUMENT
-// ------------------------------------------------------------
-
-const handleDocumentUpload = async (event) => {
-  const file = event.target.files?.[0];
-
-  // Allow selecting the same file again later.
-  event.target.value = "";
-
-  if (!file) return;
-
-  try {
-    await scanner.upload(file);
-  } catch (error) {
-    console.error("Document upload failed:", error);
-  }
-};
 
         // 9. Refresh the dashboard after everything succeeds.
         setRefreshKey((current) => current + 1);
@@ -1190,6 +1171,7 @@ const handleDocumentUpload = async (event) => {
 <input
   ref={uploadInputRef}
   type="file"
+  multiple
   accept=".jpg,.jpeg,.png,.webp,.bmp,.tif,.tiff,image/jpeg,image/png,image/webp"
   style={{ display: "none" }}
   onChange={handleDocumentUpload}

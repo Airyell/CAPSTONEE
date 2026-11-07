@@ -304,6 +304,18 @@ export default function Login({ onLogin, onStudentAccess }) {
             </div>
           </div>
         </div>
+
+        <p className="login-credit">
+          Background photo © USTP –{" "}
+          <a
+            href="https://ustp.edu.ph/cdo/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            ustp.edu.ph/cdo
+          </a>
+          . For academic use only.
+        </p>
       </div>
     );
   }
@@ -435,6 +447,18 @@ export default function Login({ onLogin, onStudentAccess }) {
           </div>
         </div>
       </div>
+
+      <p className="login-credit">
+        Background photo © USTP –{" "}
+        <a
+          href="https://ustp.edu.ph/cdo/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          ustp.edu.ph/cdo
+        </a>
+        . For academic use only.
+      </p>
     </div>
   );
 }

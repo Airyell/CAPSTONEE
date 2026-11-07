@@ -1,30 +1,46 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "./supabaseClient";
 import "./styles/OCRConfirmation.css";
+import "./styles/OCRBatch.css";
 
-const isPdf = (url) => /\.pdf(\?|#|$)/i.test(url || "");
+// ------------------------------------------------------------
+// HELPERS
+// ------------------------------------------------------------
 
-// Normalize names for comparison.
 const normalizeName = (name) =>
   String(name || "")
     .trim()
     .replace(/\s+/g, " ")
     .toLowerCase();
 
+const nameTokens = (name) =>
+  normalizeName(name)
+    .replace(/[^a-z0-9 ]/g, " ")
+    .split(" ")
+    .filter(Boolean);
+
+const studentLabel = (s) =>
+  s
+    ? [s.first_name, s.middle_name, s.last_name].filter(Boolean).join(" ")
+    : "";
+
+const getPreviewUrl = (item) =>
+  item?.result?.image_data_url ||
+  item?.imageDataUrl ||
+  item?.result?.file_url ||
+  item?.result?.fileUrl ||
+  "";
+
 // Statuses that should NOT count as an existing document.
 // Example: ["Rejected", "Deleted"] lets the student re-upload a rejected file.
-// Leave empty to treat every saved record as a duplicate.
 const IGNORED_DUPLICATE_STATUSES = [];
 
 // Look for an already-saved document of the same type for the same student.
-// Returns the existing record, or null if none exists.
-const findExistingDocument = async (studentId, documentId) => {
+export const findExistingDocument = async (studentId, documentId) => {
   let query = supabase
     .from("tbl_student_documents")
-    .select(
-      "student_documents_id, document_name, date_uploaded, status"
-    )
+    .select("student_documents_id, document_name, date_uploaded, status")
     .eq("student_id", Number(studentId))
     .eq("document_id", Number(documentId));
 
@@ -49,74 +65,95 @@ const formatDate = (value) => {
   return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString();
 };
 
-export default function OCRConfirmation({
-  ocrResult = null,
-  studentId = "",
-  studentName = "",
-  fileName = "",
-  fileUrl = "",
-  detectedDocType = "",
-  documentTypeConfidence = null,
-  onCancel,
-  onSave,
+// ------------------------------------------------------------
+// ONE PREVIEW PAGE (inside the scrollable list)
+// ------------------------------------------------------------
+
+function PreviewPage({ item, index }) {
+  const url = getPreviewUrl(item);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => setFailed(false), [url]);
+
+  return (
+    <div className="ocr-preview-item" data-index={index}>
+      <span className="ocr-preview-tag">{index + 1}</span>
+
+      {url && !failed ? (
+        <img
+          src={url}
+          alt={`Scanned document ${index + 1}`}
+          className="ocr-preview-image"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div className="ocr-no-preview">
+          <p className="ocr-no-preview-title">
+            {failed ? "Preview could not be loaded" : "No preview available"}
+          </p>
+          <p className="ocr-no-preview-text">
+            Remove this file and add it again.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------
+// DETECTED INFORMATION FOR ONE DOCUMENT
+//
+// Every document keeps its own panel mounted (hidden when it is not
+// in view), so edits and database checks are not lost when the staff
+// scrolls away and back.
+// ------------------------------------------------------------
+
+function ItemPanel({
+  item,
+  position,
+  hidden,
+  docs,
+  docsError,
+  studentId,
+  studentName,
+  saving,
+  saveInfo,
+  inBatchDuplicate,
+  mismatchMessage,
+  onChange,
+  onRemove,
 }) {
-  const [docs, setDocs] = useState([]);
-  const [docsError, setDocsError] = useState("");
+  const ocrResult = item.result || {};
+  const studentKnown =
+    studentId !== undefined && studentId !== null && studentId !== "";
+
   const [documentId, setDocumentId] = useState("");
   const [suggested, setSuggested] = useState(false);
 
   const [pickedStudent, setPickedStudent] = useState(null);
   const [editedStudentName, setEditedStudentName] = useState("");
-
   const [studentLookupStatus, setStudentLookupStatus] = useState("");
 
-  const [saving, setSaving] = useState(false);
-  const [previewError, setPreviewError] = useState(false);
-
-  // Duplicate check state.
   const [duplicateDoc, setDuplicateDoc] = useState(null);
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
   const [duplicateCheckError, setDuplicateCheckError] = useState("");
 
-  // Use the scanned image returned by Flask when fileUrl is empty.
-  const previewUrl =
-    fileUrl ||
-    ocrResult?.image_data_url ||
-    ocrResult?.file_url ||
-    ocrResult?.fileUrl ||
-    "";
-
-  const previewIsPdf = isPdf(previewUrl);
-
-  // Reset preview error whenever a new scan is loaded.
-  useEffect(() => {
-    setPreviewError(false);
-  }, [previewUrl]);
-
-  // OCR-extracted name.
   const ocrName = {
-    first: ocrResult?.first_name || "",
-    middle: ocrResult?.middle_name || "",
-    last: ocrResult?.last_name || "",
+    first: ocrResult.first_name || "",
+    middle: ocrResult.middle_name || "",
+    last: ocrResult.last_name || "",
   };
 
-  const ocrFullName = [
-    ocrName.first,
-    ocrName.middle,
-    ocrName.last,
-  ]
+  const ocrFullName = [ocrName.first, ocrName.middle, ocrName.last]
     .filter(Boolean)
     .join(" ");
 
-  // Possible student matches returned by the backend.
-  const candidates = Array.isArray(ocrResult?.student_candidates)
+  const candidates = Array.isArray(ocrResult.student_candidates)
     ? ocrResult.student_candidates
     : [];
 
-  const matchedStudent = ocrResult?.matched_student || null;
+  const matchedStudent = ocrResult.matched_student || null;
 
-  // Combine matched student and possible candidates.
-  // Remove duplicate records using student_id.
   const studentOptions = [
     ...(matchedStudent ? [matchedStudent] : []),
     ...candidates,
@@ -124,90 +161,25 @@ export default function OCRConfirmation({
     (student, index, self) =>
       student?.student_id &&
       self.findIndex(
-        (s) =>
-          String(s.student_id) === String(student.student_id)
+        (s) => String(s.student_id) === String(student.student_id)
       ) === index
   );
 
-  // 1. Load document types from the database.
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadDocumentTypes = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("tbl_documents")
-          .select("document_id, document_name")
-          .eq("is_enrollment_requirement", true)
-          .order("document_name");
-
-        if (cancelled) return;
-
-        if (error) {
-          console.error("Failed to load document types:", error);
-
-          setDocsError(
-            "Could not load document types from the database."
-          );
-          return;
-        }
-
-        if (!data?.length) {
-          setDocs([]);
-          setDocsError(
-            "No document types were found in the database."
-          );
-          return;
-        }
-
-        setDocs(data);
-        setDocsError("");
-      } catch (error) {
-        if (cancelled) return;
-
-        console.error("Error loading document types:", error);
-
-        setDocsError(
-          "Could not load document types from the database."
-        );
-      }
-    };
-
-    loadDocumentTypes();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // 2. Automatically select the detected document type.
+  // 1. Auto-select the detected document type.
   useEffect(() => {
     if (!docs.length) return;
 
-    const label = (
-      ocrResult?.document_type ||
-      detectedDocType ||
-      ""
-    )
-      .trim()
-      .toLowerCase();
+    const label = (ocrResult.document_type || "").trim().toLowerCase();
 
-    // First: match the document ID returned by the classifier.
-    let match = ocrResult?.document_id
+    let match = ocrResult.document_id
       ? docs.find(
-          (d) =>
-            String(d.document_id) ===
-            String(ocrResult.document_id)
+          (d) => String(d.document_id) === String(ocrResult.document_id)
         )
       : null;
 
-    // Second: match the detected document name.
     if (!match && label && label !== "unknown") {
       match = docs.find(
-        (d) =>
-          String(d.document_name || "")
-            .trim()
-            .toLowerCase() === label
+        (d) => String(d.document_name || "").trim().toLowerCase() === label
       );
     }
 
@@ -217,14 +189,11 @@ export default function OCRConfirmation({
       return;
     }
 
-    // Third: use the classifier's best suggestion.
-    const top = ocrResult?.document_type_suggestions?.[0];
+    const top = ocrResult.document_type_suggestions?.[0];
 
     if (top) {
       const suggestedDoc = docs.find(
-        (d) =>
-          String(d.document_id) ===
-          String(top.document_id)
+        (d) => String(d.document_id) === String(top.document_id)
       );
 
       if (suggestedDoc) {
@@ -234,98 +203,49 @@ export default function OCRConfirmation({
       }
     }
 
-    // No valid match: keep the current selection if possible.
-    setDocumentId((currentId) => {
-      const stillExists = docs.some(
-        (d) => String(d.document_id) === currentId
-      );
-
-      return stillExists ? currentId : "";
-    });
+    setDocumentId((currentId) =>
+      docs.some((d) => String(d.document_id) === currentId) ? currentId : ""
+    );
 
     setSuggested(false);
-  }, [docs, ocrResult, detectedDocType]);
+  }, [docs, item.id]);
 
-  // 3. Initialize the editable student name whenever a new scan loads.
-  useEffect(() => {
-    const initialName = studentId
-      ? studentName
-      : ocrFullName;
-
-    setEditedStudentName(initialName);
-    setPickedStudent(null);
-    setStudentLookupStatus("");
-
-    // Automatically search the database using the OCR name.
-    // No need to edit or blur the Student Name field.
-    if (!studentId && initialName.trim()) {
-      handleStudentNameBlur(initialName);
-    }
-  }, [ocrResult, studentId, studentName]);
-
-  // 4. Find the student record using the provided name.
-  const handleStudentNameBlur = async (
-    nameToCheck = editedStudentName
-  ) => {
-    const searchName = nameToCheck.trim();
+  // 2. Verify the student record from a name.
+  const verifyStudentName = async (nameToCheck) => {
+    const searchName = (nameToCheck || "").trim();
 
     if (!searchName) {
       setPickedStudent(null);
-      setStudentLookupStatus(
-        "Please enter the student's name."
-      );
+      setStudentLookupStatus("Please enter the student's name.");
       return;
     }
 
-    // Existing Student Profile scans already have a student ID.
-    if (studentId) {
-      setStudentLookupStatus(
-        "Existing student record."
-      );
+    if (studentKnown) {
+      setStudentLookupStatus("Existing student record.");
       return;
     }
 
     setStudentLookupStatus("Checking student record...");
-
     setPickedStudent(null);
 
     try {
-      // First: check the candidates already returned by OCR.
-      const candidateMatch = studentOptions.find((student) => {
-        const fullName = [
-          student.first_name,
-          student.middle_name,
-          student.last_name,
-        ]
-          .filter(Boolean)
-          .join(" ");
-
-        return (
-          normalizeName(fullName) ===
-          normalizeName(searchName)
-        );
-      });
+      const candidateMatch = studentOptions.find(
+        (student) =>
+          normalizeName(studentLabel(student)) === normalizeName(searchName)
+      );
 
       if (candidateMatch) {
         setPickedStudent(candidateMatch);
-
         setStudentLookupStatus(
           "Student record found. Student ID automatically loaded."
         );
         return;
       }
 
-      // Second: search the actual student table.
-      // Assumes student name columns are first_name,
-      // middle_name, and last_name.
-      const nameParts = searchName
-        .split(/\s+/)
-        .filter(Boolean);
+      const nameParts = searchName.split(/\s+/).filter(Boolean);
 
       if (nameParts.length < 2) {
-        setStudentLookupStatus(
-          "Please enter the student's complete name."
-        );
+        setStudentLookupStatus("Please enter the student's complete name.");
         return;
       }
 
@@ -333,40 +253,26 @@ export default function OCRConfirmation({
 
       const { data: rows, error } = await supabase
         .from("tbl_student")
-        .select(
-          "student_id, first_name, middle_name, last_name"
-        )
+        .select("student_id, first_name, middle_name, last_name")
         .ilike("last_name", `%${lastWord}%`)
         .limit(100);
 
       if (error) {
-        console.error(
-          "Student name lookup failed:",
-          error
-        );
-
+        console.error("Student name lookup failed:", error);
         setStudentLookupStatus(
           "Could not verify the student name. Please try again."
         );
         return;
       }
 
-      // Compare the complete name regardless of how it is split in the table.
       const target = normalizeName(searchName);
 
       const data = (rows || []).filter(
-        (s) =>
-          normalizeName(
-            [s.first_name, s.middle_name, s.last_name]
-              .filter(Boolean)
-              .join(" ")
-          ) === target
+        (s) => normalizeName(studentLabel(s)) === target
       );
 
-      // Only accept one unambiguous database match.
       if (data.length === 1) {
         setPickedStudent(data[0]);
-
         setStudentLookupStatus(
           "Student record found. Student ID automatically loaded."
         );
@@ -380,25 +286,48 @@ export default function OCRConfirmation({
         );
       }
     } catch (error) {
-      console.error(
-        "Error checking student name:",
-        error
-      );
-
+      console.error("Error checking student name:", error);
       setStudentLookupStatus(
         "An error occurred while checking the student record."
       );
     }
   };
 
-  // 5. Determine the final student information.
-  const finalStudentId =
-    studentId || pickedStudent?.student_id || "";
+  // 3. Initialize the editable name, then look the student up.
+  useEffect(() => {
+    const initialName = studentKnown ? studentName : ocrFullName;
+
+    setPickedStudent(null);
+    setStudentLookupStatus("");
+
+    // The hook already found one confident match (it tolerates a missing
+    // middle name and small OCR mistakes), so use it directly.
+    if (!studentKnown && matchedStudent?.student_id) {
+      setEditedStudentName(studentLabel(matchedStudent));
+      setPickedStudent(matchedStudent);
+      setStudentLookupStatus(
+        "Matched from the name found in the document. Please confirm it is the correct student."
+      );
+      return;
+    }
+
+    setEditedStudentName(initialName);
+
+    if (!studentKnown && initialName.trim()) {
+      verifyStudentName(initialName);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id, studentId, studentName]);
+
+  const finalStudentId = studentKnown
+    ? String(studentId)
+    : pickedStudent?.student_id
+      ? String(pickedStudent.student_id)
+      : "";
 
   const finalStudentName = editedStudentName.trim();
 
-  // 5b. Check for an existing saved document whenever the student
-  // or the selected document type changes.
+  // 4. Duplicate check against saved documents.
   useEffect(() => {
     let cancelled = false;
 
@@ -414,8 +343,7 @@ export default function OCRConfirmation({
 
     findExistingDocument(finalStudentId, documentId)
       .then((existing) => {
-        if (cancelled) return;
-        setDuplicateDoc(existing);
+        if (!cancelled) setDuplicateDoc(existing);
       })
       .catch((error) => {
         if (cancelled) return;
@@ -433,335 +361,546 @@ export default function OCRConfirmation({
     };
   }, [finalStudentId, documentId]);
 
-  // 6. Save the confirmed document.
-  const handleSave = async () => {
-    if (!documentId || saving) return;
+  // 5. Report this document's state to the container.
+  useEffect(() => {
+    const doc = docs.find((d) => String(d.document_id) === String(documentId));
 
-    if (!finalStudentId) {
-      alert(
-        "No matching student record found. Please correct the student name before saving."
-      );
-      return;
-    }
+    onChange(item.id, {
+      documentId,
+      documentName: doc?.document_name || "",
+      studentId: finalStudentId,
+      studentName: finalStudentName,
+      pickedStudent,
+      checkingDuplicate,
+      duplicateDoc,
+      ocrName,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    item.id,
+    documentId,
+    docs,
+    finalStudentId,
+    finalStudentName,
+    pickedStudent,
+    checkingDuplicate,
+    duplicateDoc,
+  ]);
 
-    if (!finalStudentName) {
-      alert("Please enter the student's name.");
-      return;
-    }
+  // Profile only: warn when the OCR name does not look like the student.
+  const profileNameWarning = (() => {
+    if (!studentKnown || !ocrFullName) return "";
 
-    if (!previewUrl) {
-      alert(
-        "The scanned file is missing. Please scan the document again."
-      );
-      return;
-    }
+    const ocrT = nameTokens(ocrFullName);
+    const stuT = nameTokens(studentName);
 
-    try {
-      setSaving(true);
+    if (!ocrT.length || !stuT.length) return "";
 
-      const doc = docs.find(
-        (d) =>
-          String(d.document_id) === String(documentId)
-      );
+    const overlap = ocrT.filter((t) => stuT.includes(t)).length;
 
-      if (!doc) {
-        throw new Error(
-          "The selected document type was not found."
-        );
+    return overlap >= Math.min(2, ocrT.length)
+      ? ""
+      : `The name read from this document ("${ocrFullName}") does not look like ${studentName}. Check that it belongs to this student.`;
+  })();
+
+  const disabled = saving || saveInfo?.state === "saving";
+
+  return (
+    <div
+      className="ocr-panel ocr-item-panel"
+      style={{
+        position: "absolute",
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+        display: hidden ? "none" : "flex",
+        flexDirection: "column",
+        overflowY: "auto",
+        boxSizing: "border-box",
+      }}
+    >
+      <div className="ocr-panel-header">
+        <span className="ocr-panel-title">Detected information</span>
+        <span className="ocr-position">{position}</span>
+      </div>
+
+      {/* DOCUMENT TYPE */}
+      <div className="ocr-field-group">
+        <label className="ocr-field-label">Document type</label>
+
+        <select
+          className="ocr-field-select"
+          value={documentId}
+          onChange={(e) => {
+            setDocumentId(e.target.value);
+            setSuggested(false);
+          }}
+          disabled={disabled || !docs.length}
+        >
+          <option value="">Select Document Type</option>
+
+          {docs.map((d) => (
+            <option key={d.document_id} value={String(d.document_id)}>
+              {d.document_name}
+            </option>
+          ))}
+        </select>
+
+        <p className="ocr-field-hint">
+          {docsError ||
+            (documentId
+              ? suggested
+                ? "Best guess from OCR. Please confirm."
+                : "Auto-detected via OCR. Correct if needed."
+              : "Could not detect the type. Please choose one.")}
+        </p>
+
+        {checkingDuplicate && (
+          <p className="ocr-field-hint">Checking for existing documents...</p>
+        )}
+
+        {!checkingDuplicate && duplicateDoc && (
+          <p className="ocr-field-hint is-error" role="alert">
+            This document type is already saved for this student
+            {formatDate(duplicateDoc.date_uploaded)
+              ? ` (uploaded ${formatDate(duplicateDoc.date_uploaded)})`
+              : ""}
+            {duplicateDoc.status ? `, status: ${duplicateDoc.status}` : ""}.
+          </p>
+        )}
+
+        {inBatchDuplicate && (
+          <p className="ocr-field-hint is-error" role="alert">
+            Another document in this batch already has this type for the
+            same student. Change the type or remove this file.
+          </p>
+        )}
+
+        {!checkingDuplicate && duplicateCheckError && (
+          <p className="ocr-field-hint is-error" role="alert">
+            {duplicateCheckError}
+          </p>
+        )}
+      </div>
+
+      {/* STUDENT NAME */}
+      <div className="ocr-field-group">
+        <label className="ocr-field-label" htmlFor={`ocr-student-${item.id}`}>
+          Student name
+        </label>
+
+        <input
+          id={`ocr-student-${item.id}`}
+          type="text"
+          className="ocr-field-select ocr-student-name-input"
+          value={editedStudentName}
+          onChange={(e) => {
+            setEditedStudentName(e.target.value);
+            setPickedStudent(null);
+            setStudentLookupStatus(
+              "Name edited. Leave this field to verify the student record."
+            );
+          }}
+          onBlur={() => verifyStudentName(editedStudentName)}
+          placeholder="Enter student name"
+          disabled={disabled}
+          autoComplete="off"
+        />
+
+        <p className="ocr-field-hint">
+          {studentLookupStatus ||
+            "Automatically extracted by OCR. Edit the name if needed."}
+        </p>
+
+        {studentKnown && ocrFullName && (
+          <p className="ocr-field-hint">Read from document: {ocrFullName}</p>
+        )}
+
+        {mismatchMessage && (
+          <p className="ocr-field-hint is-error" role="alert">
+            {mismatchMessage}
+          </p>
+        )}
+
+        {profileNameWarning && (
+          <p className="ocr-field-hint is-warning" role="alert">
+            {profileNameWarning}
+          </p>
+        )}
+      </div>
+
+      {/* STUDENT ID */}
+      <div className="ocr-info-row">
+        <span className="ocr-info-label">Student ID</span>
+        <span className="ocr-info-value">{finalStudentId || "—"}</span>
+      </div>
+
+      {saveInfo?.state === "failed" && (
+        <p className="ocr-field-hint is-error" role="alert">
+          Could not save: {saveInfo.message}
+        </p>
+      )}
+
+      {saveInfo?.state === "saving" && (
+        <p className="ocr-field-hint">Saving this document...</p>
+      )}
+
+      <button
+        type="button"
+        className="ocr-remove-link"
+        onClick={() => onRemove?.(item.id)}
+        disabled={disabled}
+      >
+        Remove this document from the batch
+      </button>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------
+// CONTAINER
+// ------------------------------------------------------------
+
+export default function OCRConfirmation({
+  items = [],
+  studentId = "",
+  studentName = "",
+  onBack,
+  onCancel,
+  onRemove,
+  onSave,
+}) {
+  const studentKnown =
+    studentId !== undefined && studentId !== null && studentId !== "";
+
+  const [docs, setDocs] = useState([]);
+  const [docsError, setDocsError] = useState("");
+
+  const [states, setStates] = useState({});
+  const [saveStatus, setSaveStatus] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const scrollRef = useRef(null);
+
+  // Load document types once for the whole batch.
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("tbl_documents")
+          .select("document_id, document_name")
+          .eq("is_enrollment_requirement", true)
+          .order("document_name");
+
+        if (cancelled) return;
+
+        if (error) {
+          console.error("Failed to load document types:", error);
+          setDocsError("Could not load document types from the database.");
+          return;
+        }
+
+        if (!data?.length) {
+          setDocs([]);
+          setDocsError("No document types were found in the database.");
+          return;
+        }
+
+        setDocs(data);
+        setDocsError("");
+      } catch (error) {
+        if (cancelled) return;
+        console.error("Error loading document types:", error);
+        setDocsError("Could not load document types from the database.");
+      }
+    };
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handlePanelChange = useCallback((id, next) => {
+    setStates((prev) => {
+      const current = prev[id];
+
+      if (current && Object.keys(next).every((k) => current[k] === next[k])) {
+        return prev;
       }
 
-      if (typeof onSave !== "function") {
-        throw new Error(
-          "The save function is not available."
-        );
-      }
+      return { ...prev, [id]: next };
+    });
+  }, []);
 
-      // Re-check right before saving, in case a record was added
-      // after the preview check ran (for example, from another scanner).
-      const existing = await findExistingDocument(
-        finalStudentId,
-        documentId
-      );
+  // ----------------------------------------------------------
+  // BATCH LOGIC
+  // ----------------------------------------------------------
 
-      if (existing) {
-        setDuplicateDoc(existing);
+  const rows = items.map((item, index) => ({
+    item,
+    index,
+    st: states[item.id] || {},
+  }));
 
-        const when = formatDate(existing.date_uploaded);
+  const seenKeys = new Set();
 
-        alert(
-          `${doc.document_name} is already saved for this student` +
-            (when ? ` (uploaded ${when})` : "") +
-            ". Duplicate documents are not allowed."
-        );
-        return;
-      }
+  rows.forEach((row) => {
+    const { st } = row;
+    const key =
+      st.studentId && st.documentId ? `${st.studentId}:${st.documentId}` : "";
 
-      await onSave({
-        studentId: finalStudentId,
-        studentName: finalStudentName,
-        ocrName,
-        documentId: Number(documentId),
-        documentType: doc.document_name || "",
-        fileName,
-        fileUrl: previewUrl,
+    row.inBatchDuplicate = !!key && seenKeys.has(key);
 
-        // Include original scanned image data.
-        imageDataUrl: previewUrl.startsWith("data:image/")
-          ? previewUrl
-          : "",
+    if (key) seenKeys.add(key);
 
-        // Include the confirmed student record.
-        matchedStudent: studentId
-          ? matchedStudent
-          : pickedStudent || null,
-      });
-    } catch (error) {
-      console.error(
-        "OCR confirmation save failed:",
-        error
-      );
+    row.ready =
+      !!st.documentId &&
+      !!st.studentId &&
+      !!st.studentName &&
+      !st.checkingDuplicate &&
+      !st.duplicateDoc &&
+      !row.inBatchDuplicate &&
+      !docsError;
+  });
 
-      alert(
-        error instanceof Error
-          ? error.message
-          : "Failed to save the document. Please try again."
-      );
-    } finally {
-      setSaving(false);
-    }
+  const readyCount = rows.filter((r) => r.ready).length;
+
+  const chipState = (row) => {
+    const info = saveStatus[row.item.id];
+
+    if (info?.state === "saving") return "saving";
+    if (info?.state === "failed") return "failed";
+
+    return row.ready ? "ready" : "attention";
   };
+
+  // ----------------------------------------------------------
+  // SCROLL SYNC: the item in view decides what the right side shows
+  // ----------------------------------------------------------
+
+  const syncActiveIndex = useCallback(() => {
+    const el = scrollRef.current;
+
+    if (!el || !el.clientHeight) return;
+
+    const index = Math.min(
+      Math.max(items.length - 1, 0),
+      Math.max(0, Math.round(el.scrollTop / el.clientHeight))
+    );
+
+    setActiveIndex((prev) => (prev === index ? prev : index));
+  }, [items.length]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(syncActiveIndex);
+    return () => cancelAnimationFrame(frame);
+  }, [items.length, syncActiveIndex]);
+
+  const jumpTo = (index) => {
+    const el = scrollRef.current;
+
+    if (!el) return;
+
+    el.scrollTo({ top: index * el.clientHeight, behavior: "smooth" });
+  };
+
+  // ----------------------------------------------------------
+  // SAVE ALL
+  // ----------------------------------------------------------
+
+  const handleSaveAll = async () => {
+    if (saving || !readyCount) return;
+
+    setSaving(true);
+
+    for (const row of rows) {
+      if (!row.ready) continue;
+
+      const { item, st } = row;
+      const previewUrl = getPreviewUrl(item);
+
+      setSaveStatus((prev) => ({ ...prev, [item.id]: { state: "saving" } }));
+
+      try {
+        if (!previewUrl) {
+          throw new Error("The scanned image is missing. Remove and add it again.");
+        }
+
+        // Re-check right before saving, in case a record was added elsewhere.
+        const existing = await findExistingDocument(st.studentId, st.documentId);
+
+        if (existing) {
+          throw new Error(
+            `${st.documentName} is already saved for this student.`
+          );
+        }
+
+        const ok = await onSave(item.id, {
+          studentId: st.studentId,
+          studentName: st.studentName,
+          ocrName: st.ocrName,
+          documentId: Number(st.documentId),
+          documentType: st.documentName || "",
+          fileName: item.filename || "",
+          fileUrl: previewUrl,
+          imageDataUrl: previewUrl.startsWith("data:image/") ? previewUrl : "",
+          matchedStudent: studentKnown
+            ? item.result?.matched_student || null
+            : st.pickedStudent || null,
+        });
+
+        if (ok === false) {
+          throw new Error("The document was not saved. Please try again.");
+        }
+
+        setSaveStatus((prev) => {
+          const next = { ...prev };
+          delete next[item.id];
+          return next;
+        });
+      } catch (error) {
+        console.error("Save failed for", item.label, error);
+
+        setSaveStatus((prev) => ({
+          ...prev,
+          [item.id]: {
+            state: "failed",
+            message:
+              error instanceof Error
+                ? error.message
+                : "Failed to save the document.",
+          },
+        }));
+      }
+    }
+
+    setSaving(false);
+  };
+
+  if (!items.length) return null;
+
+  const activeItem = items[Math.min(activeIndex, items.length - 1)];
+  const failedCount = Object.values(saveStatus).filter(
+    (s) => s.state === "failed"
+  ).length;
 
   const content = (
     <div className="ocr-overlay">
       <div className="ocr-card">
-
         {/* HEADER */}
         <div className="ocr-header">
           <div>
-            <h3 className="ocr-title">
-              DOCUMENT CONFIRMATION
-            </h3>
-
+            <h3 className="ocr-title">DOCUMENT CONFIRMATION</h3>
             <p className="ocr-sub">
               Review detected information before saving
             </p>
           </div>
+
+          <span className="ocr-complete-badge">
+            <span className="ocr-complete-dot" />
+            {items.length} {items.length === 1 ? "document" : "documents"}
+          </span>
         </div>
 
         {/* BODY */}
         <div className="ocr-body">
-
-          {/* FILE PREVIEW */}
+          {/* FILE PREVIEW (scrollable list of every document) */}
           <div className="ocr-panel">
             <div className="ocr-panel-header">
-              <span className="ocr-panel-title">
-                File preview
-              </span>
-
-              <span className="ocr-file-type-badge">
-                {previewIsPdf ? "PDF" : "IMAGE"}
-              </span>
+              <span className="ocr-panel-title">File preview</span>
+              <span className="ocr-file-type-badge">IMAGE</span>
             </div>
 
-            <div className="ocr-preview-box">
-              {previewUrl && !previewError ? (
-                previewIsPdf ? (
-                  <iframe
-                    title="Scanned document preview"
-                    src={previewUrl}
-                    className="ocr-preview-iframe"
-                    onError={() => setPreviewError(true)}
-                  />
-                ) : (
-                  <img
-                    src={previewUrl}
-                    alt="Scanned document"
-                    className="ocr-preview-image"
-                    onError={() => setPreviewError(true)}
-                  />
-                )
-              ) : (
-                <div className="ocr-no-preview">
-                  <p className="ocr-no-preview-title">
-                    {previewError
-                      ? "Preview could not be loaded"
-                      : "No preview available"}
-                  </p>
-
-                  <p className="ocr-no-preview-text">
-                    {previewError
-                      ? "Please scan the document again and check the scanner response."
-                      : "The scanned image was not received. Please scan the document again."}
-                  </p>
-                </div>
-              )}
+            <div
+              className="ocr-preview-scroll"
+              ref={scrollRef}
+              onScroll={syncActiveIndex}
+              tabIndex={0}
+              aria-label="Scroll to review each uploaded document"
+            >
+              {items.map((item, index) => (
+                <PreviewPage key={item.id} item={item} index={index} />
+              ))}
             </div>
 
-            {fileName && (
-              <div className="ocr-meta-row">
-                <span className="ocr-meta-label">
-                  File name
-                </span>
-
-                <span className="ocr-meta-value">
-                  {fileName}
-                </span>
+            {items.length > 0 && (
+              <div className="ocr-chip-row" aria-label="Jump to a document">
+                {rows.map((row) => (
+                  <button
+                    key={row.item.id}
+                    type="button"
+                    className={`ocr-chip ocr-chip-${chipState(row)}${
+                      row.index === activeIndex ? " is-active" : ""
+                    }`}
+                    onClick={() => jumpTo(row.index)}
+                    title={row.item.label}
+                  >
+                    {row.index + 1}
+                  </button>
+                ))}
               </div>
             )}
-          </div>
 
-          {/* DETECTED INFORMATION */}
-          <div>
-            <div className="ocr-panel">
-              <div className="ocr-panel-header">
-                <span className="ocr-panel-title">
-                  Detected information
-                </span>
-              </div>
-
-              {/* DOCUMENT TYPE */}
-              <div className="ocr-field-group">
-                <label className="ocr-field-label">
-                  Document type
-                </label>
-
-                <select
-                  className="ocr-field-select"
-                  value={documentId}
-                  onChange={(e) => {
-                    setDocumentId(e.target.value);
-                    setSuggested(false);
-                  }}
-                  disabled={saving || !docs.length}
-                >
-                  <option value="">
-                    Select Document Type
-                  </option>
-
-                  {docs.map((d) => (
-                    <option
-                      key={d.document_id}
-                      value={String(d.document_id)}
-                    >
-                      {d.document_name}
-                    </option>
-                  ))}
-                </select>
-
-                <p className="ocr-field-hint">
-                  {docsError ||
-                    (documentId
-                      ? suggested
-                        ? "Best guess from OCR. Please confirm."
-                        : "Auto-detected via OCR. Correct if needed."
-                      : "Could not detect the type. Please choose one.")}
-                </p>
-
-                {documentTypeConfidence != null &&
-                  documentTypeConfidence !== "" &&
-                  Number.isFinite(Number(documentTypeConfidence)) && (
-                    <p className="ocr-field-hint">
-                      Detection confidence:{" "}
-                      {(
-                        Number(documentTypeConfidence) <= 1
-                          ? Number(documentTypeConfidence) * 100
-                          : Number(documentTypeConfidence)
-                      ).toFixed(1)}
-                      %
-                    </p>
-                  )}
-
-                {/* DUPLICATE WARNING */}
-                {checkingDuplicate && (
-                  <p className="ocr-field-hint">
-                    Checking for existing documents...
-                  </p>
-                )}
-
-                {!checkingDuplicate && duplicateDoc && (
-                  <p
-                    className="ocr-field-hint"
-                    role="alert"
-                    style={{ color: "#b42318", fontWeight: 600 }}
-                  >
-                    This document type is already saved for this
-                    student
-                    {formatDate(duplicateDoc.date_uploaded)
-                      ? ` (uploaded ${formatDate(
-                          duplicateDoc.date_uploaded
-                        )})`
-                      : ""}
-                    {duplicateDoc.status
-                      ? `, status: ${duplicateDoc.status}`
-                      : ""}
-                    .
-                  </p>
-                )}
-
-                {!checkingDuplicate && duplicateCheckError && (
-                  <p
-                    className="ocr-field-hint"
-                    role="alert"
-                    style={{ color: "#b42318" }}
-                  >
-                    {duplicateCheckError}
-                  </p>
-                )}
-              </div>
-
-              {/* EDITABLE STUDENT NAME */}
-              <div className="ocr-field-group">
-                <label
-                  className="ocr-field-label"
-                  htmlFor="ocr-student-name"
-                >
-                  Student name
-                </label>
-
-                <input
-                  id="ocr-student-name"
-                  type="text"
-                  className="ocr-field-select ocr-student-name-input"
-                  value={editedStudentName}
-                  onChange={(e) => {
-                    setEditedStudentName(e.target.value);
-                    setPickedStudent(null);
-                    setStudentLookupStatus(
-                      "Name edited. Leave this field to verify the student record."
-                    );
-                  }}
-                  onBlur={() => handleStudentNameBlur(editedStudentName)}
-                  placeholder="Enter student name"
-                  disabled={saving}
-                  autoComplete="off"
-                />
-
-                <p className="ocr-field-hint">
-                  {studentLookupStatus ||
-                    "Automatically extracted by OCR. Edit the name if needed."}
-                </p>
-              </div>
-
-              {/* STUDENT ID */}
-              <div className="ocr-info-row">
-                <span className="ocr-info-label">
-                  Student ID
-                </span>
-
-                <span className="ocr-info-value">
-                  {finalStudentId || "—"}
-                </span>
-              </div>
+            <div className="ocr-meta-row">
+              <span className="ocr-meta-label">File name</span>
+              <span className="ocr-meta-value">
+                {activeItem?.filename || activeItem?.label}
+              </span>
             </div>
           </div>
 
+          {/* DETECTED INFORMATION (follows the document in view) */}
+          <div
+            style={{
+              position: "relative",
+              height: "auto",
+              minHeight: 480,
+              alignSelf: "stretch",
+            }}
+          >
+            {rows.map((row, index) => (
+              <ItemPanel
+                key={row.item.id}
+                item={row.item}
+                position={`Document ${index + 1} of ${items.length}`}
+                hidden={index !== activeIndex}
+                docs={docs}
+                docsError={docsError}
+                studentId={studentId}
+                studentName={studentName}
+                saving={saving}
+                saveInfo={saveStatus[row.item.id]}
+                inBatchDuplicate={row.inBatchDuplicate}
+                onChange={handlePanelChange}
+                onRemove={onRemove}
+              />
+            ))}
+          </div>
         </div>
 
         {/* FOOTER */}
         <div className="ocr-footer">
-          <div />
+          <p className="ocr-footer-note">
+            {readyCount} of {items.length} ready to save
+            {failedCount ? `, ${failedCount} failed` : ""}
+          </p>
 
           <div className="ocr-footer-actions">
+            <button
+              type="button"
+              className="ocr-cancel-btn"
+              onClick={onBack}
+              disabled={saving}
+            >
+              Back to queue
+            </button>
+
             <button
               type="button"
               className="ocr-cancel-btn"
@@ -774,23 +913,13 @@ export default function OCRConfirmation({
             <button
               type="button"
               className="ocr-save-btn"
-              onClick={handleSave}
-              disabled={
-                !documentId ||
-                !finalStudentId ||
-                !finalStudentName ||
-                !previewUrl ||
-                saving ||
-                checkingDuplicate ||
-                !!duplicateDoc ||
-                !!docsError
-              }
+              onClick={handleSaveAll}
+              disabled={!readyCount || saving}
             >
-              {saving ? "Saving..." : "Save Document"}
+              {saving ? "Saving..." : `Save All (${readyCount})`}
             </button>
           </div>
         </div>
-
       </div>
     </div>
   );

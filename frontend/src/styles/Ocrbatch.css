@@ -1,0 +1,604 @@
+/* =========================================================
+   REGISSCAN OCR BATCH (multi-document) STYLES
+   Loaded after OCRConfirmation.css. Same navy / gold system.
+   ========================================================= */
+
+
+/* =========================================================
+   SCROLLABLE FILE PREVIEW
+   Each document fills the box; scrolling snaps one at a time.
+   ========================================================= */
+
+.ocr-preview-scroll {
+  flex: none;
+
+  width: 100%;
+
+  height: min(44vh, 340px) !important;
+
+  box-sizing: border-box;
+
+  background: #f8fafc;
+
+  border: 1px solid #e2e8f0;
+
+  border-radius: 10px;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  scroll-snap-type: y mandatory;
+
+  overscroll-behavior: contain;
+
+  position: relative;
+}
+
+
+.ocr-preview-scroll:focus-visible {
+  outline: 2px solid rgba(230, 168, 23, 0.70);
+  outline-offset: 2px;
+}
+
+
+.ocr-preview-item {
+  position: relative;
+
+  height: 100%;
+
+  padding: 10px;
+
+  box-sizing: border-box;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+
+.ocr-preview-item + .ocr-preview-item {
+  border-top: 2px dashed #cbd5e1;
+}
+
+
+.ocr-preview-tag {
+  position: absolute;
+
+  top: 14px;
+  left: 14px;
+
+  z-index: 1;
+
+  min-width: 22px;
+  height: 22px;
+
+  padding: 0 6px;
+
+  box-sizing: border-box;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 999px;
+
+  background: #0b123d;
+
+  color: #ffffff;
+
+  font-size: 11px;
+  font-weight: 800;
+}
+
+
+/* =========================================================
+   DOCUMENT CHIPS (jump + status)
+   ========================================================= */
+
+.ocr-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 6px;
+
+  margin-top: 10px;
+}
+
+
+.ocr-chip {
+  min-width: 30px;
+  height: 28px;
+
+  padding: 0 8px;
+
+  box-sizing: border-box;
+
+  border-radius: 7px;
+
+  border: 1px solid #cbd5e1;
+
+  background: #ffffff;
+
+  color: #334155;
+
+  font-size: 11px;
+  font-weight: 800;
+
+  cursor: pointer;
+
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease;
+}
+
+
+.ocr-chip:hover {
+  background: #f1f5f9;
+}
+
+
+.ocr-chip-ready {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+
+.ocr-chip-attention {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+
+.ocr-chip-failed {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #b42318;
+}
+
+
+.ocr-chip-saving {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+
+.ocr-chip.is-active {
+  box-shadow: 0 0 0 2px #0b123d;
+}
+
+
+.ocr-chip:focus-visible {
+  outline: 2px solid rgba(230, 168, 23, 0.70);
+  outline-offset: 2px;
+}
+
+
+/* =========================================================
+   RIGHT PANEL EXTRAS
+   ========================================================= */
+
+.ocr-item-panel {
+  display: block;
+}
+
+
+.ocr-position {
+  color: #64748b;
+
+  font-size: 11px;
+  font-weight: 600;
+
+  white-space: nowrap;
+}
+
+
+.ocr-field-hint.is-error {
+  color: #b42318;
+
+  font-weight: 600;
+}
+
+
+.ocr-field-hint.is-warning {
+  color: #92400e;
+
+  font-weight: 600;
+}
+
+
+.ocr-remove-link {
+  margin-top: 12px;
+
+  padding: 0;
+
+  border: none;
+
+  background: none;
+
+  color: #64748b;
+
+  font-size: 11px;
+  font-weight: 600;
+
+  text-decoration: underline;
+
+  cursor: pointer;
+}
+
+
+.ocr-remove-link:hover:not(:disabled) {
+  color: #b42318;
+}
+
+
+.ocr-remove-link:disabled {
+  opacity: 0.45;
+
+  cursor: not-allowed;
+}
+
+
+/* BATCH STUDENT BANNER */
+
+.ocr-batch-banner {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+
+  gap: 4px 10px;
+
+  padding: 10px 14px;
+
+  box-sizing: border-box;
+
+  border-radius: 10px;
+
+  background: rgba(230, 168, 23, 0.12);
+
+  border: 1px solid rgba(230, 168, 23, 0.35);
+}
+
+
+.ocr-batch-banner-label {
+  color: rgba(255, 255, 255, 0.65);
+
+  font-size: 11px;
+  font-weight: 600;
+}
+
+
+.ocr-batch-banner-value {
+  color: #ffffff;
+
+  font-size: 13px;
+  font-weight: 800;
+}
+
+
+.ocr-batch-banner-id {
+  margin-left: auto;
+
+  color: #e6a817;
+
+  font-size: 11px;
+  font-weight: 700;
+}
+
+
+/* FOOTER NOTE */
+
+.ocr-footer-note {
+  margin: 0;
+
+  color: rgba(255, 255, 255, 0.70);
+
+  font-size: 12px;
+  font-weight: 600;
+}
+
+
+/* =========================================================
+   UPLOAD QUEUE MODAL
+   ========================================================= */
+
+.ocr-overlay .ocrq-card {
+  width: 100% !important;
+
+  max-width: 780px !important;
+
+  max-height: calc(100vh - 32px) !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  box-sizing: border-box;
+
+  background-color: #0b123d !important;
+
+  background-image:
+    linear-gradient(
+      145deg,
+      #10174a 0%,
+      #0b123d 55%,
+      #080d32 100%
+    ) !important;
+
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+
+  border-radius: 18px !important;
+
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
+
+  font-family: "DM Sans", sans-serif !important;
+
+  overflow: hidden !important;
+}
+
+
+.ocrq-body {
+  flex: 1 1 auto;
+
+  min-height: 0;
+
+  padding: 16px 20px;
+
+  box-sizing: border-box;
+
+  overflow-y: auto;
+}
+
+
+.ocrq-progress {
+  height: 6px;
+
+  margin-bottom: 14px;
+
+  border-radius: 999px;
+
+  background: rgba(255, 255, 255, 0.10);
+
+  overflow: hidden;
+}
+
+
+.ocrq-progress-bar {
+  height: 100%;
+
+  border-radius: 999px;
+
+  background: #e6a817;
+
+  transition: width 0.35s ease;
+}
+
+
+.ocrq-list {
+  margin: 0;
+  padding: 0;
+
+  list-style: none;
+
+  border: 1px solid rgba(255, 255, 255, 0.12);
+
+  border-radius: 12px;
+
+  background: rgba(6, 12, 43, 0.55);
+}
+
+
+.ocrq-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 14px;
+
+  padding: 13px 16px;
+}
+
+
+.ocrq-row + .ocrq-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+
+.ocrq-row-main {
+  display: flex;
+  flex-direction: column;
+
+  gap: 3px;
+
+  min-width: 0;
+}
+
+
+.ocrq-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  color: #ffffff;
+
+  font-size: 14px;
+  font-weight: 700;
+}
+
+
+.ocrq-error {
+  color: #fca5a5;
+
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+
+.ocrq-row-actions {
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+
+  flex-shrink: 0;
+}
+
+
+.ocrq-link-btn {
+  padding: 0;
+
+  border: none;
+
+  background: none;
+
+  color: rgba(255, 255, 255, 0.60);
+
+  font-size: 11px;
+  font-weight: 600;
+
+  text-decoration: underline;
+
+  cursor: pointer;
+}
+
+
+.ocrq-link-btn:hover {
+  color: #ffffff;
+}
+
+
+.ocrq-link-btn:focus-visible {
+  outline: 2px solid rgba(230, 168, 23, 0.70);
+  outline-offset: 2px;
+}
+
+
+.ocrq-badge {
+  min-width: 78px;
+
+  padding: 4px 10px;
+
+  box-sizing: border-box;
+
+  border-radius: 999px;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  text-align: center;
+
+  white-space: nowrap;
+}
+
+
+.ocrq-badge-completed {
+  background: rgba(34, 197, 94, 0.14);
+  color: #4ade80;
+}
+
+
+.ocrq-badge-processing {
+  background: rgba(59, 130, 246, 0.16);
+  color: #60a5fa;
+}
+
+
+.ocrq-badge-queued {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+
+.ocrq-badge-failed {
+  background: rgba(239, 68, 68, 0.16);
+  color: #fca5a5;
+}
+
+
+.ocrq-footer-left {
+  justify-content: flex-start;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .ocrq-progress-bar {
+    transition: none;
+  }
+
+  .ocr-preview-scroll {
+    scroll-behavior: auto;
+  }
+}
+
+
+/* =========================================================
+   TABLET / MOBILE
+   ========================================================= */
+
+@media (max-width: 900px) {
+  .ocr-preview-scroll {
+    height: 300px !important;
+  }
+}
+
+
+@media (max-width: 600px) {
+  .ocr-preview-scroll {
+    height: 260px !important;
+  }
+
+  .ocrq-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ocrq-row-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .ocr-footer-note {
+    text-align: center;
+  }
+}
+
+/* =========================================================
+   QUEUE MODAL BUTTONS: ONE ROW, NO WRAPPING
+   ========================================================= */
+
+.ocrq-card .ocr-footer {
+  gap: 14px;
+}
+
+
+.ocrq-card .ocr-footer-actions {
+  flex-wrap: nowrap;
+}
+
+
+.ocrq-card .ocr-cancel-btn,
+.ocrq-card .ocr-save-btn {
+  flex: none;
+
+  white-space: nowrap;
+}
+
+
+/* On small screens the buttons stack, so they may take the full width. */
+@media (max-width: 700px) {
+  .ocrq-card .ocr-footer-actions {
+    flex-wrap: wrap;
+  }
+
+  .ocrq-card .ocr-cancel-btn,
+  .ocrq-card .ocr-save-btn {
+    flex: 1 1 auto;
+  }
+}
+.ocr-overlay .ocrq-card {
+  border: 2px solid #e6a817 !important;
+}
