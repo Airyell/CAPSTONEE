@@ -555,10 +555,6 @@ export default function StudentProfile({ studentId, onBack }) {
         // 5. Reload documents so the saved file appears in the table.
         await loadDocuments(sid);
 
-        alert(
-          `Saved ${typeName} successfully.\n\nLocal folder:\n${localPath}`
-        );
-
         return true;
       } catch (err) {
         console.error("Save scanned document failed:", err);
@@ -578,12 +574,8 @@ export default function StudentProfile({ studentId, onBack }) {
           }
         }
 
-        alert(
-          err.message || "Failed to save the scanned document."
-        );
-
-        // Keep the OCR confirmation open so the user can retry.
-        return false;
+                // The confirmation shows this error beside the failed document.
+        throw err;
       }
     },
   });
@@ -593,30 +585,15 @@ export default function StudentProfile({ studentId, onBack }) {
 // ============================================================
 
 const handleDocumentUpload = async (e) => {
-  const file = e.target.files?.[0];
+  const files = Array.from(e.target.files || []);
 
-  // Allow selecting the same file again.
+  // Allow selecting the same files again.
   e.target.value = "";
 
-  if (!file) return;
+  if (!files.length) return;
 
   if (!student.student_id) {
     alert("No student is selected.");
-    return;
-  }
-
-  const allowedTypes = [
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/bmp",
-    "image/tiff",
-  ];
-
-  if (!allowedTypes.includes(file.type)) {
-    alert(
-      "Unsupported file format. Please upload a JPG, JPEG, PNG, WEBP, BMP, or TIFF image."
-    );
     return;
   }
 
@@ -624,9 +601,8 @@ const handleDocumentUpload = async (e) => {
     setUploadingFile(true);
     setError("");
 
-    // Use the same upload/OCR function as Dashboard.
-    await scanner.upload(file);
-
+    // The hook checks each file's format and skips unsupported ones.
+    await scanner.upload(files);
   } catch (err) {
     console.error("Document upload OCR error:", err);
 
@@ -1114,6 +1090,7 @@ const handleDocumentUpload = async (e) => {
   <input
     ref={uploadInputRef}
     type="file"
+    multiple
     accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff"
     style={{ display: "none" }}
     onChange={handleDocumentUpload}

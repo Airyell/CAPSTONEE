@@ -1,5 +1,5 @@
 import OCRConfirmation from "./OCRconfirmation.jsx";
-
+import UploadQueueModal from "./UploadQueueModal.jsx";
 /**
  * Renders the Scan Document modal and the OCR confirmation dialog.
  * Drive it with the useDocumentScanner hook:
@@ -8,28 +8,38 @@ import OCRConfirmation from "./OCRconfirmation.jsx";
  *   <DocumentScanner scanner={scanner} studentId={id} studentName={name} />
  */
 export default function DocumentScanner({ scanner, studentId, studentName }) {
-  const {
+      const {
     showScanModal,
     selectedCredential,
     scanning,
     scanError,
 
-    // Upload state
-    uploading,
     uploadError,
+    clearUploadError,
+
     scanners,
     selectedScanner,
     setSelectedScanner,
     loadingScanners,
     scannerError,
     loadScanners,
-    ocrResult,
+
+    items,
+    completedItems,
+    queueBusy,
+    showQueue,
     showOCRConfirmation,
+
     close,
     scan,
-    scanAgain,
-    cancelOCR,
-    saveOCR,
+    upload,
+    scanAnother,
+    reviewItems,
+    backToQueue,
+    discardAll,
+    retryItem,
+    removeItem,
+    saveItem,
   } = scanner;
 
   return (
@@ -63,84 +73,11 @@ export default function DocumentScanner({ scanner, studentId, studentName }) {
     UPLOAD DOCUMENT LOADING OVERLAY
     ======================================================== */}
 
-{uploading && (
-  <div
-    style={{
-      position: "fixed",
-      inset: 0,
-      zIndex: 99999,
-      background: "rgba(15, 23, 42, 0.65)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "20px",
-      animation: "uploadFadeIn 0.2s ease",
-    }}
-  >
-    <div
-      style={{
-        width: "100%",
-        maxWidth: "400px",
-        background: "#ffffff",
-        borderRadius: "16px",
-        padding: "35px 25px",
-        textAlign: "center",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
-      }}
-    >
-      <div
-        style={{
-          width: "55px",
-          height: "55px",
-          border: "5px solid #e5e7eb",
-          borderTop: "5px solid #000B58",
-          borderRadius: "50%",
-          margin: "0 auto 22px",
-          animation: "spin 1s linear infinite",
-        }}
-      />
 
-      <h3
-        style={{
-          fontSize: "19px",
-          fontWeight: "700",
-          color: "#111827",
-          marginBottom: "9px",
-        }}
-      >
-        Processing Document
-      </h3>
-
-      <p
-        style={{
-          fontSize: "13px",
-          lineHeight: "1.6",
-          color: "#6b7280",
-          margin: 0,
-        }}
-      >
-        Please wait while the system extracts and analyzes
-        the information from your uploaded document.
-      </p>
-
-      <p
-        style={{
-          marginTop: "18px",
-          fontSize: "11px",
-          color: "#000B58",
-          fontWeight: "600",
-          animation: "uploadPulse 1.5s infinite",
-        }}
-      >
-        DO NOT CLOSE THIS WINDOW
-      </p>
-    </div>
-  </div>
-)}
 
 {/* UPLOAD ERROR MESSAGE */}
 
-{uploadError && !uploading && (
+{uploadError && (
   <div
     style={{
       position: "fixed",
@@ -157,6 +94,21 @@ export default function DocumentScanner({ scanner, studentId, studentName }) {
       fontSize: "13px",
     }}
   >
+        <button
+      type="button"
+      onClick={clearUploadError}
+      aria-label="Dismiss"
+      style={{
+        float: "right",
+        border: "none",
+        background: "transparent",
+        cursor: "pointer",
+        fontSize: "16px",
+        color: "#b91c1c",
+      }}
+    >
+      ×
+    </button>
     <strong>Upload Failed</strong>
     <p style={{ margin: "5px 0 0" }}>{uploadError}</p>
   </div>
@@ -440,24 +392,28 @@ export default function DocumentScanner({ scanner, studentId, studentName }) {
           OCR CONFIRMATION
           ======================================================== */}
 
-      {showOCRConfirmation && ocrResult && (
+            <UploadQueueModal
+        open={showQueue}
+        items={items}
+        scanning={scanning}
+        busy={queueBusy}
+        onAddFiles={upload}
+        onScanAnother={scanAnother}
+        onReview={reviewItems}
+        onRetry={retryItem}
+        onRemove={removeItem}
+        onDiscard={discardAll}
+      />
+
+      {showOCRConfirmation && completedItems.length > 0 && (
         <OCRConfirmation
-          ocrResult={ocrResult}
+          items={completedItems}
           studentId={studentId ?? ""}
           studentName={studentName ?? ""}
-          fileName={ocrResult.filename || ""}
-          fileUrl={
-  ocrResult.image_data_url ||
-  ocrResult.file_url ||
-  ocrResult.fileUrl ||
-  ""
-}
-          detectedDocType={ocrResult.document_type || ""}
-          documentTypeConfidence={ocrResult.document_type_confidence ?? null}
-          preferredDocType={selectedCredential?.name || ""}
-          onCancel={cancelOCR}
-          onScanAgain={scanAgain}
-          onSave={saveOCR}
+          onBack={backToQueue}
+          onCancel={discardAll}
+          onRemove={removeItem}
+          onSave={saveItem}
         />
       )}
     </>

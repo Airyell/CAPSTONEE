@@ -109,8 +109,18 @@ HEADER_MARGIN = 0.05      # best must beat the runner-up by this much
 # Optional extra header wordings, keyed by the exact tbl_documents.document_name.
 # Only needed when the printed header differs a lot from the stored name.
 ALIASES = {
-    # "Transcript of Records": ["official transcript", "tor"],
-    # "Form 137": ["permanent record", "school form 10", "sf10"],
+    "Form 137": [
+        "permanent record",
+        "student permanent record",
+        "learner permanent record",
+        "school form 10",
+        "sf10",
+    ],
+    "Good Moral": [
+        "good moral certificate",
+        "certificate of good moral character",
+        "good moral character",
+    ],
 }
 
 # Words that should count as the same word
@@ -173,8 +183,110 @@ def get_document_types():
 # TEXT MATCHING
 # ============================================================
 
+# ------------------------------------------------------------
+# OCR sometimes drops the spaces between words, e.g.
+# "GOOD MORALCERTIFICATE", "FORM137-SHS" or
+# "SENIORHIGHSCHOOLSTUDENTPERMANENTRECORD". These helpers put the spaces
+# back, using the words that appear in the document names and aliases.
+# ------------------------------------------------------------
+
+_GLUE_MIN_LEN = 8          # only long, space-less words are split
+_vocab_cache = {"sig": None, "words": ()}
+
+
+def _vocabulary():
+    """Document-related words (longest first), built from tbl_documents."""
+    docs = _cache.get("docs") or []
+    sig = tuple(sorted(
+        d["document_name"] + "|" + str(d.get("aliases") or "")
+        for d in docs
+    ))
+
+    if _vocab_cache["sig"] == sig:
+        return _vocab_cache["words"]
+
+    words = set(SYNONYMS.keys()) | set(SYNONYMS.values())
+
+    for d in docs:
+        for name in _names_for(d):
+            for w in re.sub(r"[^a-z]", " ", name.lower()).split():
+                words.add(w)
+                words.add(SYNONYMS.get(w, w))
+
+    words = sorted(
+        (w for w in words if len(w) >= 4 and w not in STOP),
+        key=len,
+        reverse=True,
+    )
+
+    _vocab_cache["sig"] = sig
+    _vocab_cache["words"] = tuple(words)
+
+    return _vocab_cache["words"]
+
+
+_SMALL_JOINERS = {"of", "and", "for", "the"}
+
+
+def _split_piece(word, vocab):
+    """Split one space-less word around known document words."""
+    if word in vocab:
+        return [word]
+
+    def acceptable(piece):
+        # A leftover must be a known word, a small joiner like "of", or a
+        # real chunk of 6+ letters. This keeps ordinary words such as
+        # "information", "uniform" or "transformation" from being split.
+        return (
+            piece in vocab
+            or piece in _SMALL_JOINERS
+            or len(piece) >= 6
+        )
+
+    for v in vocab:
+        i = word.find(v)
+
+        if i < 0:
+            continue
+
+        left, right = word[:i], word[i + len(v):]
+
+        if all(acceptable(p) for p in (left, right) if p):
+            parts = []
+
+            if left:
+                parts += _split_piece(left, vocab)
+
+            parts.append(v)
+
+            if right:
+                parts += _split_piece(right, vocab)
+
+            return parts
+
+    return [word]
+
+
+def _split_glued(word, vocab):
+    """'moralcertificate' -> ['moral', 'certificate']."""
+    if len(word) < _GLUE_MIN_LEN:
+        return [word]
+
+    return _split_piece(word, vocab)
+
+
 def _tokens(text):
-    words = re.sub(r"[^a-z0-9 ]", " ", str(text).lower()).split()
+    text = re.sub(r"[^a-z0-9 ]", " ", str(text).lower())
+
+    # "form137" -> "form 137", "may2005" -> "may 2005"
+    text = re.sub(r"(?<=[a-z])(?=[0-9])|(?<=[0-9])(?=[a-z])", " ", text)
+
+    vocab = _vocabulary()
+    words = []
+
+    for w in text.split():
+        words += _split_glued(w, vocab) if w.isalpha() else [w]
+
     words = [SYNONYMS.get(w, w) for w in words]
     return [w for w in words if w not in STOP]
 
