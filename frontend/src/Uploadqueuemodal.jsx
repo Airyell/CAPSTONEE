@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { createPortal } from "react-dom";
-import "./styles/OCRConfirmation.css";
-import "./styles/OCRBatch.css";
+import "./styles/OCRconfirmation.css";
+import "./styles/Ocrbatch.css";
 
 const STATUS = {
   queued: { label: "Queued", cls: "queued" },

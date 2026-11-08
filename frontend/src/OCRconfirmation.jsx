@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "./supabaseClient";
-import "./styles/OCRConfirmation.css";
-import "./styles/OCRBatch.css";
+import "./styles/OCRconfirmation.css";
+import "./styles/Ocrbatch.css";
 
 // ------------------------------------------------------------
 // HELPERS
