@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import "./styles/SystemReports.css";
 import { authHeaders } from "./rbac"; // RBAC
 
-const API_BASE = import.meta.env?.VITE_API_BASE_URL || "http://localhost:8000/api";
+const API_BASE = import.meta.env?.VITE_API_BASE_URL || "https://regisscan.onrender.com/api";
 
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

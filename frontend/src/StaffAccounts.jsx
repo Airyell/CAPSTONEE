@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import "./styles/StaffAccounts.css";
 import { authHeaders } from "./rbac"; // RBAC
 
-const API_BASE = import.meta.env?.VITE_API_BASE_URL || "http://localhost:8000/api";
+const API_BASE = import.meta.env?.VITE_API_BASE_URL || "https://regisscan.onrender.com/api";
 
 const EMPTY_FORM = { idNumber: "", fullName: "", email: "", password: "" }; // CHANGED (id): added idNumber
 const ROWS_PER_PAGE = 10;

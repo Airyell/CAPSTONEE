@@ -3,8 +3,7 @@ import "./styles/Login.css";
 import { supabase } from "./supabaseClient";
 import { normalizeRole, requestApiToken, setAuthToken } from "./rbac";
 
-const API_BASE =
-  import.meta.env?.VITE_API_BASE_URL || "http://localhost:8000/api";
+const API_BASE = import.meta.env?.VITE_API_BASE_URL || "https://regisscan.onrender.com/api";
 
 // ADDED: failed-login tracking for the Audit Logs
 const FAILED_LOGIN_LIMIT = 3;        // log a warning every time this many failures pile up...

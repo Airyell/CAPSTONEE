@@ -15,7 +15,7 @@ import { AuthProvider, ProtectedPage } from "./AuthContext";
 import { normalizeRole, canAccessPage, getDefaultPage, clearAuthToken, revokeApiToken, setAuthToken } from "./rbac"; // CHANGED: added setAuthToken
 import { supabase } from "./supabaseClient"; // ADDED
 
-const API_BASE = import.meta.env?.VITE_API_BASE_URL || "http://localhost:8000/api";
+const API_BASE = import.meta.env?.VITE_API_BASE_URL || "https://regisscan.onrender.com/api";
 
 // =====================================================
 // URL <-> PAGE MAPPING

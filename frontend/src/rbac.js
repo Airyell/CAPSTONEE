@@ -98,7 +98,7 @@ export const getDefaultPage = () => "Dashboard";
 // same roles on the server (frontend checks alone can be bypassed).
 // The token is kept in sessionStorage → cleared when the tab is closed.
 // ============================================================================
-const API_BASE = import.meta.env?.VITE_API_BASE_URL || "http://localhost:8000/api";
+const API_BASE = import.meta.env?.VITE_API_BASE_URL || "https://regisscan.onrender.com/api";
 const TOKEN_KEY = "regisscan_api_token";
 
 export const setAuthToken = (token) => {
