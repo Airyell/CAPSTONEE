@@ -1,7 +1,7 @@
 import { useState } from "react";
 import "./styles/Login.css";
 import { supabase } from "./supabaseClient";
-import { normalizeRole, requestApiToken, setAuthToken } from "./rbac";
+import { normalizeRole, setAuthToken } from "./rbac";
 
 const API_BASE = import.meta.env?.VITE_API_BASE_URL || "https://regisscan.onrender.com/api";
 
@@ -145,18 +145,25 @@ export default function Login({ onLogin, onStudentAccess }) {
       // Falls back to the username only if a row has no name yet.
       const displayName = data.name || data.username;
 
-      try {
-        const response = await fetch(
-          `${API_BASE}/staff/${data.staff_id}/login`,
-          { method: "POST" }
-        );
-
-        if (!response.ok) {
-          console.warn("Failed to update staff status:", response.status);
-        }
-      } catch (statusErr) {
-        console.error("Failed to set staff status to Active:", statusErr);
-      }
+      // CHANGED: update staff status in the background.
+      // Do not block the login process while Laravel responds.
+      fetch(`${API_BASE}/staff/${data.staff_id}/login`, {
+        method: "POST",
+      })
+        .then((response) => {
+          if (!response.ok) {
+            console.warn(
+              "Failed to update staff status:",
+              response.status
+            );
+          }
+        })
+        .catch((statusErr) => {
+          console.error(
+            "Failed to set staff status to Active:",
+            statusErr
+          );
+        });
 
       const { error: activityError } = await supabase
         .from("tbl_system_activity")
@@ -174,7 +181,6 @@ export default function Login({ onLogin, onStudentAccess }) {
       }
 
       // CHANGED: the Supabase access token is now the API token
-      // (replaces: const apiToken = await requestApiToken(inputUsername, inputPassword);)
       setAuthToken(authData.session.access_token);
 
       onLogin(displayName, data.user_role, Number(data.staff_id)); // CHANGED (name): was data.username
@@ -336,12 +342,12 @@ export default function Login({ onLogin, onStudentAccess }) {
           </div>
 
           <form
-  onSubmit={(e) => {
-    e.preventDefault();
-    if (loading) return;
-    handleLogin(username, password, null);
-  }}
->
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (loading) return;
+              handleLogin(username, password, null);
+            }}
+          >
             <div className="mb-4">
               <div className="login-input-wrapper">
                 <input
@@ -406,12 +412,12 @@ export default function Login({ onLogin, onStudentAccess }) {
             )}
 
             <button
-  type="submit"
-  className="login-btn"
-  disabled={loading}
->
-  {loading ? "Logging in..." : "Log in"}
-</button>
+              type="submit"
+              className="login-btn"
+              disabled={loading}
+            >
+              {loading ? "Logging in..." : "Log in"}
+            </button>
           </form>
 
           <div className="login-divider-wrapper">
