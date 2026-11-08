@@ -25,7 +25,7 @@ class OcrController extends Controller
                     file_get_contents($file->getRealPath()),
                     $file->getClientOriginalName()
                 )
-                ->post('http://127.0.0.1:5001/ocr');
+                ->post(config('services.ocr.url'));
 
             if (!$response->successful()) {
                 return response()->json([
