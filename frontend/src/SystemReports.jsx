@@ -106,38 +106,52 @@ export default function SystemReports() {
   const [logsError, setLogsError]             = useState(null);
   const [logMonth, setLogMonth]               = useState("all"); // "all" or 0-11
 
+  // CHANGED: reports and archived logs are now fetched together, so the stat cards,
+  // charts and the Archived Logs card all appear at the same time. Each request keeps
+  // its own error handling, so one failing does not hide the other.
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch(`${API_BASE}/reports?year=${year}`, { headers: authHeaders() }) // RBAC
+    setLogsLoading(true);
+    setLogsError(null);
+
+    const reportsReq = fetch(`${API_BASE}/reports?year=${year}`, { headers: authHeaders() }) // RBAC
       .then(res => {
         if (res.status === 401 || res.status === 403) throw new Error("Not authorized. Please log out and log in again."); // RBAC
         if (!res.ok) throw new Error("Couldn't load report data.");
         return res.json();
       })
-      .then(json => {
-        setStats(json.stats);
-        setMonthlyTrends(json.monthlyTrends);
-        setStoredCreds(json.mostStoredCredentials);
-        setRequestedCreds(json.mostRequestedCredentials);
-      })
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [year]);
+      .then(json => ({ json }))
+      .catch(err => ({ err: err.message }));
 
-  // CHANGED: load archived logs on page load (and when the year changes), not only when the card is opened
-  useEffect(() => {
-    setLogsLoading(true);
-    setLogsError(null);
-    fetch(`${API_BASE}/reports/archived-logs?year=${year}`, { headers: authHeaders() }) // RBAC
+    const logsReq = fetch(`${API_BASE}/reports/archived-logs?year=${year}`, { headers: authHeaders() }) // RBAC
       .then(res => {
         if (res.status === 401 || res.status === 403) throw new Error("Not authorized. Please log out and log in again.");
         if (!res.ok) throw new Error("Couldn't load archived logs.");
         return res.json();
       })
-      .then(json => setLogs(Array.isArray(json) ? json : (json.logs || [])))
-      .catch(err => setLogsError(err.message))
-      .finally(() => setLogsLoading(false));
+      .then(json => ({ json }))
+      .catch(err => ({ err: err.message }));
+
+    Promise.all([reportsReq, logsReq]).then(([reports, logsRes]) => {
+      if (reports.err) {
+        setError(reports.err);
+      } else {
+        setStats(reports.json.stats);
+        setMonthlyTrends(reports.json.monthlyTrends);
+        setStoredCreds(reports.json.mostStoredCredentials);
+        setRequestedCreds(reports.json.mostRequestedCredentials);
+      }
+
+      if (logsRes.err) {
+        setLogsError(logsRes.err);
+      } else {
+        setLogs(Array.isArray(logsRes.json) ? logsRes.json : (logsRes.json.logs || []));
+      }
+
+      setLoading(false);
+      setLogsLoading(false);
+    });
   }, [year]);
 
   // ADDED: filter logs by selected month

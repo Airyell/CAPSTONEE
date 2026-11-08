@@ -9,10 +9,7 @@ use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\AuthController; // RBAC
 use App\Http\Controllers\RequestController;
 use App\Http\Controllers\StudentController;
-<<<<<<< HEAD
-=======
 
->>>>>>> OCRback
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -84,8 +81,4 @@ Route::middleware('auth.staff')->group(function () {
 Route::post('staff/{staff}/login',  [StaffController::class, 'setActive']);
 Route::post('staff/{staff}/logout', [StaffController::class, 'setInactive']);
 
-<<<<<<< HEAD
-
-=======
->>>>>>> OCRback
 Route::post('/students', [StudentController::class, 'store']);

@@ -8,45 +8,41 @@ const REQUIRED_DOCS = 8;
 // document_name stores the uploaded file name (e.g. "Form_138.jpg",
 // "Certification_of_Live_Birth_20261029_105109.jpg"), so each name is reduced
 // to one of the 8 credentials shown in the student profile.
-const CREDENTIAL_KEYS = {
-  "certification of live birth": "Certification of Live Birth",
-  "form 138": "Form 138",
-  "form 137": "Form 137",
-  "good moral": "Good Moral",
-  "grades": "Grades",
-  "transcript of records": "TOR",
-  "tor": "TOR",
-  "leave of absence": "LOA",
-  "loa": "LOA",
-  "withdrawal": "Withdrawal",
-};
+// CHANGED: matches by keyword instead of an exact name, so names like
+// "Form_138_Juan.jpg" or "Good_Moral_Certificate.pdf" are still counted.
+const CREDENTIAL_PATTERNS = [
+  [/live\s*birth|birth\s*cert/, "Certification of Live Birth"],
+  [/form\s*138|\b138\b/, "Form 138"],
+  [/form\s*137|\b137\b/, "Form 137"],
+  [/good\s*moral/, "Good Moral"],
+  [/\bgrades?\b/, "Grades"],
+  [/transcript|\btor\b/, "TOR"],
+  [/leave\s*of\s*absence|\bloa\b/, "LOA"],
+  [/withdrawal/, "Withdrawal"],
+];
 
 const toCredential = (fileName) => {
-  const key = String(fileName ?? "")
+  const name = String(fileName ?? "")
     .replace(/\.[^.]+$/, "") // drop extension
     .replace(/_\d{8}_\d{6}$/, "") // drop upload timestamp
     .replace(/[_-]+/g, " ")
     .trim()
     .toLowerCase();
-  return CREDENTIAL_KEYS[key] ?? null;
+  const hit = CREDENTIAL_PATTERNS.find(([regex]) => regex.test(name)); // CHANGED
+  return hit ? hit[1] : null;
 };
 
 // Set this to the status values that should NOT count toward completion
 const NOT_COUNTED = ["Rejected"];
 
-// rows -> { [student_id]: number of distinct document types on file }
+// rows -> { [student_id]: number of documents on file }
+// CHANGED: counts every document stored in tbl_student_documents for the student,
+// whatever the file is named (names like "868242103_..._n.jpg" are now counted too)
 const countDistinctDocs = (rows) => {
-  const sets = {};
+  const counts = {};
   (rows ?? []).forEach((d) => {
     if (NOT_COUNTED.includes(d.status)) return;
-    const credential = toCredential(d.document_name);
-    if (!credential) return;
-    if (!sets[d.student_id]) sets[d.student_id] = new Set();
-    sets[d.student_id].add(credential);
-  });
-  const counts = {};
-  Object.keys(sets).forEach((id) => {
-    counts[id] = sets[id].size;
+    counts[d.student_id] = (counts[d.student_id] || 0) + 1;
   });
   return counts;
 };

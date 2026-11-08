@@ -19,8 +19,8 @@ class ReportsController extends Controller
         return response()->json([
             'stats'                => $this->getStats(),
             'monthlyTrends'        => $this->getMonthlyTrends($year),
-            'mostStoredCredentials'    => $this->getMostStoredCredentials(),
-            'mostRequestedCredentials' => $this->getMostRequestedCredentials(),
+            'mostStoredCredentials'    => $this->getMostStoredCredentials((int) $year),    // CHANGED: pass year
+            'mostRequestedCredentials' => $this->getMostRequestedCredentials((int) $year), // CHANGED: pass year
         ]);
     }
 
@@ -148,10 +148,11 @@ class ReportsController extends Controller
 
     // ── MOST STORED CREDENTIALS ───────────────────────────────────────
 
-    private function getMostStoredCredentials(): array
+    private function getMostStoredCredentials(int $year): array // CHANGED: takes the year
     {
         return DB::table('tbl_student_documents')
             ->selectRaw('document_name, COUNT(*) AS value')
+            ->whereRaw('EXTRACT(YEAR FROM date_uploaded) = ?', [$year]) // CHANGED: filter by selected year
             ->groupBy('document_name')
             ->orderByDesc('value')
             ->limit(8)
@@ -165,11 +166,13 @@ class ReportsController extends Controller
 
     // ── MOST REQUESTED CREDENTIALS ────────────────────────────────────
 
-    private function getMostRequestedCredentials(): array
+    private function getMostRequestedCredentials(int $year): array // CHANGED: takes the year
     {
         return DB::table('tbl_request_document as rd')
             ->join('tbl_documents as d', 'd.document_id', '=', 'rd.document_id')
+            ->join('tbl_request as r', 'r.request_id', '=', 'rd.request_id') // CHANGED: join tbl_request to get the request date
             ->selectRaw('d.document_name AS label, COUNT(*) AS value')
+            ->whereRaw('EXTRACT(YEAR FROM r.date_request) = ?', [$year]) // CHANGED: same date column the trend chart uses
             ->groupBy('d.document_name')
             ->orderByDesc('value')
             ->limit(9)

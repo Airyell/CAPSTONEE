@@ -7,11 +7,15 @@ const navItems = ["Dashboard", "Staff Accounts", "System Reports", "Audit Logs"]
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DONUT_COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ec4899", "#3b82f6", "#e6a817", "#a78bfa", "#f87171", "#14b8a6", "#eab308"];
 
+// ADDED: shortens long file names in the Credential Distribution legend
+const truncateLabel = (text, max = 22) =>
+  text && text.length > max ? text.slice(0, max).trimEnd() + "..." : text;
+
 function BarChart({ data, months }) {
   const svgWidth = 580, svgHeight = 220, paddingLeft = 40, paddingRight = 16, paddingTop = 16, paddingBottom = 36;
   const chartWidth = svgWidth - paddingLeft - paddingRight;
   const chartHeight = svgHeight - paddingTop - paddingBottom;
-  const maxRaw = Math.max(...data.map(d => Math.max(d.uploads, d.archived)), 0);
+  const maxRaw = Math.max(...data.map(d => d.uploads), 0); // CHANGED: uploads only
   const maxVal = maxRaw > 0 ? maxRaw * 1.15 : 10;
   const barGroupWidth = chartWidth / data.length;
   const barWidth = barGroupWidth * 0.28;
@@ -32,13 +36,10 @@ function BarChart({ data, months }) {
         const groupX = paddingLeft + i * barGroupWidth;
         const centerX = groupX + barGroupWidth / 2;
         const uploadH = (d.uploads / maxVal) * chartHeight;
-        const archivedH = (d.archived / maxVal) * chartHeight;
-        const uploadX = centerX - barWidth - 2;
-        const archivedX = centerX + 2;
+        const uploadX = centerX - barWidth / 2; // CHANGED: centered now that there is a single bar
         return (
           <g key={i}>
             <rect x={uploadX} y={paddingTop + chartHeight - uploadH} width={barWidth} height={uploadH} fill="#e6a817" opacity="0.85" rx="2" />
-            <rect x={archivedX} y={paddingTop + chartHeight - archivedH} width={barWidth} height={archivedH} fill="#3b82f6" opacity="0.65" rx="2" />
             <text x={centerX} y={svgHeight - 8} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.3)">{months[i]}</text>
           </g>
         );
@@ -82,7 +83,7 @@ export default function AdminDashboard({ staffName = "Admin", onLogout, activePa
     staffCount: 0, studentCount: 0, activeStudentCount: 0,
     completedRequests: 0, totalRequestDocs: 0,
   });
-  const [barData, setBarData] = useState(months.map(() => ({ uploads: 0, archived: 0 })));
+  const [barData, setBarData] = useState(months.map(() => ({ uploads: 0 }))); // CHANGED: no archived
   const [credentialDist, setCredentialDist] = useState([]);
   const [activities, setActivities] = useState([]);
 
@@ -114,14 +115,13 @@ export default function AdminDashboard({ staffName = "Admin", onLogout, activePa
         const docs = studentDocsRes.data || [];
 
         const currentYear = new Date().getFullYear();
-        const monthly = months.map(() => ({ uploads: 0, archived: 0 }));
+        const monthly = months.map(() => ({ uploads: 0 })); // CHANGED: no archived
         docs.forEach((d) => {
           if (!d.date_uploaded) return;
           const dt = new Date(d.date_uploaded);
           if (dt.getFullYear() !== currentYear) return;
           const m = dt.getMonth();
           monthly[m].uploads += 1;
-          if ((d.status || "").toLowerCase() === "archived") monthly[m].archived += 1;
         });
 
         const counts = {};
@@ -282,7 +282,6 @@ export default function AdminDashboard({ staffName = "Admin", onLogout, activePa
                   <BarChart data={barData} months={months} />
                   <div className="admin-bar-legend">
                     <span className="admin-bar-legend-item"><span className="admin-legend-dot-gold" /> Uploads</span>
-                    <span className="admin-bar-legend-item"><span className="admin-legend-dot-blue" /> Archived</span>
                   </div>
                 </div>
 
@@ -296,9 +295,9 @@ export default function AdminDashboard({ staffName = "Admin", onLogout, activePa
                       <div className="admin-donut-legend">
                         {credentialDist.map((item, i) => (
                           <div key={i} className="admin-donut-legend-row">
-                            <span className="admin-donut-legend-label">
+                            <span className="admin-donut-legend-label" title={item.label}>
                               <span className="admin-donut-legend-dot" style={{ backgroundColor: item.color }} />
-                              {item.label}
+                              {truncateLabel(item.label)}
                             </span>
                             <span className="admin-donut-legend-value">{item.value}</span>
                           </div>
