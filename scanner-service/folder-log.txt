@@ -52,3 +52,254 @@ Error: Cannot find module 'C:\Users\USER\Documents\CAPSTONEE\scanner-service\fol
 }
 
 Node.js v22.21.0
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module 'C:\Users\USER\Documents\CAPSTONEE\scanner-service\folder-server.js'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.21.0
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module 'C:\Users\USER\Documents\CAPSTONEE\scanner-service\folder-server.js'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.21.0
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module 'C:\Users\USER\Documents\CAPSTONEE\scanner-service\folder-server.js'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.21.0
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module 'C:\Users\USER\Documents\CAPSTONEE\scanner-service\folder-server.js'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.21.0
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module 'C:\Users\USER\Documents\CAPSTONEE\scanner-service\folder-server.js'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.21.0
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module 'C:\Users\USER\Documents\CAPSTONEE\scanner-service\folder-server.js'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.21.0
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module 'C:\Users\USER\Documents\CAPSTONEE\scanner-service\folder-server.js'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.21.0
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module 'C:\Users\USER\Documents\CAPSTONEE\scanner-service\folder-server.js'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.21.0
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module 'C:\Users\USER\Documents\CAPSTONEE\scanner-service\folder-server.js'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.21.0
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module 'C:\Users\USER\Documents\CAPSTONEE\scanner-service\folder-server.js'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.21.0
+Student folder server v6 running at http://127.0.0.1:3001
+Layout: C:\StudentRecords\<College>\<ID>_<Name>\<document_type>
+Old folders will be moved from: C:\Users\USER\Documents\student
+Waiting for requests from the app...
+^CStudent folder server v6 running at http://127.0.0.1:3001
+Layout: C:\StudentRecords\<College>\<ID>_<Name>\<document_type>
+Old folders will be moved from: C:\Users\USER\Documents\student
+Waiting for requests from the app...
+[11:59:01 AM] OPTIONS /sync-folders
+[11:59:01 AM] POST /sync-folders
+  syncing 6 student(s) into C:\StudentRecords
+  + created: C:\StudentRecords\CITC\2023301814_Anna_May_Andoy
+  + created: C:\StudentRecords\CSTE\2026300708_Danielle_Vermoy_Dades
+  + created: C:\StudentRecords\CITC\2023300708_Arielle_Vermoy_Dades
+  + created: C:\StudentRecords\CITC\2023300795_Jush_Payot_Destura
+  + created: C:\StudentRecords\CITC\2026300827_Angel_Mae_Bonayog_Malolot
+  + created: C:\StudentRecords\CITC\2023301935_Christine_Paula_Ouapin_Silvestre
+  sync done: 6 created, 0 moved/renamed, 0 existing, 0 skipped, 0 failed, 0 paths to save
+[12:00:24 PM] OPTIONS /sync-folders
+[12:00:24 PM] POST /sync-folders
+  syncing 7 student(s) into C:\StudentRecords
+  + created: C:\StudentRecords\CON\2026657859_Aria_Margarette_Andoy_Yanez
+  sync done: 1 created, 0 moved/renamed, 6 existing, 0 skipped, 0 failed, 0 paths to save
+Student folder server v6 running at http://127.0.0.1:3001
+Layout: C:\StudentRecords\<College>\<ID>_<Name>\<document_type>
+Old folders will be moved from: C:\Users\USER\Documents\student
+Waiting for requests from the app...
+[12:08:46 PM] OPTIONS /sync-folders
+[12:08:47 PM] POST /sync-folders
+  syncing 4 student(s) into C:\StudentRecords
+  sync done: 0 created, 0 moved/renamed, 4 existing, 0 skipped, 0 failed, 0 paths to save
+[12:15:30 PM] OPTIONS /sync-folders
+[12:15:30 PM] POST /sync-folders
+  syncing 4 student(s) into C:\StudentRecords
+  sync done: 0 created, 0 moved/renamed, 4 existing, 0 skipped, 0 failed, 0 paths to save
+[12:18:57 PM] OPTIONS /sync-folders
+[12:18:57 PM] POST /sync-folders
+  syncing 4 student(s) into C:\StudentRecords
+  sync done: 0 created, 0 moved/renamed, 4 existing, 0 skipped, 0 failed, 0 paths to save
+Student folder server v6 running at http://127.0.0.1:3001
+Layout: C:\StudentRecords\<College>\<ID>_<Name>\<document_type>
+Old folders will be moved from: C:\Users\USER\Documents\student
+Waiting for requests from the app...
+[1:25:03 PM] OPTIONS /sync-folders
+[1:25:03 PM] POST /sync-folders
+  syncing 4 student(s) into C:\StudentRecords
+  sync done: 0 created, 0 moved/renamed, 4 existing, 0 skipped, 0 failed, 0 paths to save
+[1:30:19 PM] OPTIONS /sync-folders
+[1:30:19 PM] POST /sync-folders
+  syncing 4 student(s) into C:\StudentRecords
+  sync done: 0 created, 0 moved/renamed, 4 existing, 0 skipped, 0 failed, 0 paths to save
+[1:34:15 PM] OPTIONS /sync-folders
+[1:34:15 PM] POST /sync-folders
+  syncing 4 student(s) into C:\StudentRecords
+  sync done: 0 created, 0 moved/renamed, 4 existing, 0 skipped, 0 failed, 0 paths to save
+Student folder server v6 running at http://127.0.0.1:3001
+Layout: C:\StudentRecords\<College>\<ID>_<Name>\<document_type>
+Old folders will be moved from: C:\Users\USER\Documents\student
+Waiting for requests from the app...
+^CStudent folder server v6 running at http://127.0.0.1:3001
+Layout: C:\StudentRecords\<College>\<ID>_<Name>\<document_type>
+Old folders will be moved from: C:\Users\USER\Documents\student
+Waiting for requests from the app...
+^CStudent folder server v6 running at http://127.0.0.1:3001
+Layout: C:\StudentRecords\<College>\<ID>_<Name>\<document_type>
+Old folders will be moved from: C:\Users\USER\Documents\student
+Waiting for requests from the app...
+^CStudent folder server v6 running at http://127.0.0.1:3001
+Layout: C:\StudentRecords\<College>\<ID>_<Name>\<document_type>
+Old folders will be moved from: C:\Users\USER\Documents\student
+Waiting for requests from the app...

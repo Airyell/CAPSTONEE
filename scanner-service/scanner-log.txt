@@ -25,3 +25,369 @@ WARNING: This is a development server. Do not use it in a production deployment.
 Press CTRL+C to quit
 127.0.0.1 - - [08/Nov/2026 21:08:31] "GET / HTTP/1.1" 200 -
 127.0.0.1 - - [08/Nov/2026 21:08:31] "GET /favicon.ico HTTP/1.1" 404 -
+============================================================
+       REGISSCAN SCANNER SERVICE
+============================================================
+
+Server:
+http://127.0.0.1:5000
+
+Scanner discovery:
+GET /scanners
+
+Scan:
+POST /scan
+
+Store a scan in the student's folder:
+POST /store-scan
+
+Documents are stored ONLY in:
+C:\StudentRecords\<College>\<ID>_<Name>\
+
+============================================================
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+Press CTRL+C to quit
+127.0.0.1 - - [08/Nov/2026 21:18:41] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [08/Nov/2026 21:23:05] "GET /scanners HTTP/1.1" 200 -
+127.0.0.1 - - [08/Nov/2026 21:23:24] "GET /scanners HTTP/1.1" 200 -
+============================================================
+       REGISSCAN SCANNER SERVICE
+============================================================
+
+Server:
+http://127.0.0.1:5000
+
+Scanner discovery:
+GET /scanners
+
+Scan:
+POST /scan
+
+Store a scan in the student's folder:
+POST /store-scan
+
+Documents are stored ONLY in:
+C:\StudentRecords\<College>\<ID>_<Name>\
+
+============================================================
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+Press CTRL+C to quit
+127.0.0.1 - - [08/Nov/2026 21:35:48] "GET /scanners HTTP/1.1" 200 -
+127.0.0.1 - - [08/Nov/2026 21:48:13] "GET /scanners HTTP/1.1" 200 -
+127.0.0.1 - - [08/Nov/2026 21:48:27] "GET / HTTP/1.1" 200 -
+^C============================================================
+       REGISSCAN SCANNER SERVICE
+============================================================
+
+Server:
+http://127.0.0.1:5000
+
+Scanner discovery:
+GET /scanners
+
+Scan:
+POST /scan
+
+Store a scan in the student's folder:
+POST /store-scan
+
+Documents are stored ONLY in:
+C:\StudentRecords\<College>\<ID>_<Name>\
+
+============================================================
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+Press CTRL+C to quit
+127.0.0.1 - - [08/Nov/2026 21:58:28] "GET / HTTP/1.1" 200 -
+^C============================================================
+       REGISSCAN SCANNER SERVICE
+============================================================
+
+Server:
+http://127.0.0.1:5000
+
+Scanner discovery:
+GET /scanners
+
+Scan:
+POST /scan
+
+Store a scan in the student's folder:
+POST /store-scan
+
+Documents are stored ONLY in:
+C:\StudentRecords\<College>\<ID>_<Name>\
+
+============================================================
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+Press CTRL+C to quit
+127.0.0.1 - - [09/Nov/2026 11:12:10] "GET /scanners HTTP/1.1" 200 -
+^C============================================================
+       REGISSCAN SCANNER SERVICE
+============================================================
+
+Server:
+http://127.0.0.1:5000
+
+Scanner discovery:
+GET /scanners
+
+Scan:
+POST /scan
+
+Store a scan in the student's folder:
+POST /store-scan
+
+Documents are stored ONLY in:
+C:\StudentRecords\<College>\<ID>_<Name>\
+
+============================================================
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+Press CTRL+C to quit
+127.0.0.1 - - [09/Nov/2026 11:33:48] "OPTIONS /store-scan HTTP/1.1" 200 -
+127.0.0.1 - - [09/Nov/2026 11:33:48] "POST /store-scan HTTP/1.1" 200 -
+127.0.0.1 - - [09/Nov/2026 11:33:51] "POST /store-scan HTTP/1.1" 200 -
+127.0.0.1 - - [09/Nov/2026 11:33:54] "OPTIONS /store-scan HTTP/1.1" 200 -
+127.0.0.1 - - [09/Nov/2026 11:33:54] "POST /store-scan HTTP/1.1" 200 -
+============================================================
+       REGISSCAN SCANNER SERVICE
+============================================================
+
+Server:
+http://127.0.0.1:5000
+
+Scanner discovery:
+GET /scanners
+
+Scan:
+POST /scan
+
+Store a scan in the student's folder:
+POST /store-scan
+
+Documents are stored ONLY in:
+C:\StudentRecords\<College>\<ID>_<Name>\
+
+============================================================
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+Press CTRL+C to quit
+127.0.0.1 - - [09/Nov/2026 11:40:22] "GET /scanners HTTP/1.1" 200 -
+^C============================================================
+       REGISSCAN SCANNER SERVICE
+============================================================
+
+Server:
+http://127.0.0.1:5000
+
+Scanner discovery:
+GET /scanners
+
+Scan:
+POST /scan
+
+Store a scan in the student's folder:
+POST /store-scan
+
+Documents are stored ONLY in:
+C:\StudentRecords\<College>\<ID>_<Name>\
+
+============================================================
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+Press CTRL+C to quit
+============================================================
+       REGISSCAN SCANNER SERVICE
+============================================================
+
+Server:
+http://127.0.0.1:5000
+
+Scanner discovery:
+GET /scanners
+
+Scan:
+POST /scan
+
+Store a scan in the student's folder:
+POST /store-scan
+
+Documents are stored ONLY in:
+C:\StudentRecords\<College>\<ID>_<Name>\
+
+============================================================
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+Press CTRL+C to quit
+============================================================
+       REGISSCAN SCANNER SERVICE
+============================================================
+
+Server:
+http://127.0.0.1:5000
+
+Scanner discovery:
+GET /scanners
+
+Scan:
+POST /scan
+
+Store a scan in the student's folder:
+POST /store-scan
+
+Documents are stored ONLY in:
+C:\StudentRecords\<College>\<ID>_<Name>\
+
+============================================================
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+Press CTRL+C to quit
+============================================================
+       REGISSCAN SCANNER SERVICE
+============================================================
+
+Server:
+http://127.0.0.1:5000
+
+Scanner discovery:
+GET /scanners
+
+Scan:
+POST /scan
+
+Store a scan in the student's folder:
+POST /store-scan
+
+Documents are stored ONLY in:
+C:\StudentRecords\<College>\<ID>_<Name>\
+
+============================================================
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+Press CTRL+C to quit
+============================================================
+       REGISSCAN SCANNER SERVICE
+============================================================
+
+Server:
+http://127.0.0.1:5000
+
+Scanner discovery:
+GET /scanners
+
+Scan:
+POST /scan
+
+Store a scan in the student's folder:
+POST /store-scan
+
+Documents are stored ONLY in:
+C:\StudentRecords\<College>\<ID>_<Name>\
+
+============================================================
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+Press CTRL+C to quit
+127.0.0.1 - - [09/Nov/2026 13:29:21] "GET /scanners HTTP/1.1" 200 -
+============================================================
+       REGISSCAN SCANNER SERVICE
+============================================================
+
+Server:
+http://127.0.0.1:5000
+
+Scanner discovery:
+GET /scanners
+
+Scan:
+POST /scan
+
+Store a scan in the student's folder:
+POST /store-scan
+
+Documents are stored ONLY in:
+C:\StudentRecords\<College>\<ID>_<Name>\
+
+============================================================
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+Press CTRL+C to quit
+127.0.0.1 - - [10/Nov/2026 16:53:37] "GET /scanners HTTP/1.1" 200 -
+============================================================
+       REGISSCAN SCANNER SERVICE
+============================================================
+
+Server:
+http://127.0.0.1:5000
+
+Scanner discovery:
+GET /scanners
+
+Scan:
+POST /scan
+
+Store a scan in the student's folder:
+POST /store-scan
+
+Documents are stored ONLY in:
+C:\StudentRecords\<College>\<ID>_<Name>\
+
+============================================================
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+Press CTRL+C to quit
+============================================================
+       REGISSCAN SCANNER SERVICE
+============================================================
+
+Server:
+http://127.0.0.1:5000
+
+Scanner discovery:
+GET /scanners
+
+Scan:
+POST /scan
+
+Store a scan in the student's folder:
+POST /store-scan
+
+Documents are stored ONLY in:
+C:\StudentRecords\<College>\<ID>_<Name>\
+
+============================================================
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+Press CTRL+C to quit

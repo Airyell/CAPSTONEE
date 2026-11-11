@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import { useAuth } from "./AuthContext";
@@ -9,7 +8,8 @@ import "./styles/Dashboard.css";
 
 const ROWS_PER_PAGE = 10;
 
-const SCANNER_API = "http://127.0.0.1:5000";
+const SCANNER_API =
+  import.meta.env.VITE_FOLDER_SERVER_URL || "http://127.0.0.1:5000";
 const DOCUMENT_BUCKET = "student-documents";
 
 // Handles year_level stored as a number (1) or text ("1st Year")
@@ -395,17 +395,25 @@ export default function Dashboard({
 
         // 6. Save the physical image into the student's local folder.
         // app.py creates the college and student folders if needed.
-        const localPath = await saveScannedFile({
-          imageDataUrl: scannedImage,
-          documentType: officialDocumentType,
-          student: {
-            student_id: student.student_id,
-            first_name: student.first_name || "",
-            middle_name: student.middle_name || "",
-            last_name: student.last_name || "",
-            college_name: collegeName,
-          },
-        });
+        // The local copy is optional: it only works on the computer that
+        // runs the folder service. Supabase remains the copy of record.
+        let localPath = null;
+
+        try {
+          localPath = await saveScannedFile({
+            imageDataUrl: scannedImage,
+            documentType: officialDocumentType,
+            student: {
+              student_id: student.student_id,
+              first_name: student.first_name || "",
+              middle_name: student.middle_name || "",
+              last_name: student.last_name || "",
+              college_name: collegeName,
+            },
+          });
+        } catch (localErr) {
+          console.warn("Local folder copy skipped:", localErr.message);
+        }
 
         console.log("[LOCAL STUDENT FOLDER]", localPath);
 

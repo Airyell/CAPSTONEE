@@ -21,21 +21,16 @@ from document_classifier import (
 
 
 app = Flask(__name__)
-CORS(app)
 
-# Allow requests from your deployed frontend
-CORS(app, resources={
-    r"/*": {
-        "origins": [
-            "https://YOUR-VERCEL-DOMAIN.vercel.app",
-            "http://localhost:5173"
-        ]
-    }
-})
+# Allowed frontend origins, comma-separated. Set ALLOWED_ORIGINS on Render,
+# e.g. https://your-app.vercel.app
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+    if o.strip()
+]
+CORS(app, resources={r"/*": {"origins": ALLOWED_ORIGINS}})
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
 # ============================================================
 # CLASSIFIER STATUS
 # ============================================================
@@ -4073,7 +4068,7 @@ if __name__ == "__main__":
 
     app.run(
         host="0.0.0.0",
-        port=5001,
+        port=int(os.environ.get("PORT", 5001)),
         debug=False,
         threaded=True
     )

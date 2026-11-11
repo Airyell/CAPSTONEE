@@ -11,7 +11,8 @@ import "./styles/Dashboard.css";
 const BUCKET = "student-documents";
 
 // Local Flask scanner server.
-const FOLDER_SERVER = "http://127.0.0.1:5000";
+const FOLDER_SERVER =
+  import.meta.env.VITE_FOLDER_SERVER_URL || "http://127.0.0.1:5000";
 
 const statuses = ["Active", "LOA", "Inactive", "Graduated"];
 
@@ -515,11 +516,19 @@ export default function StudentProfile({ studentId, onBack }) {
         // 2. Save a copy to the local student folder using Flask.
         // Example:
         // C:\StudentRecords\CEA\2026302405_Arielle_Vermoy_Dades\
-        const localPath = await saveToLocalFolder({
-          blob: uploaded.blob,
-          name: uploaded.name,
-          documentName: typeName,
-        });
+        // The local copy is optional: it only works on the computer that
+        // runs the folder service. Supabase remains the copy of record.
+        let localPath = null;
+
+        try {
+          localPath = await saveToLocalFolder({
+            blob: uploaded.blob,
+            name: uploaded.name,
+            documentName: typeName,
+          });
+        } catch (localErr) {
+          console.warn("Local folder copy skipped:", localErr.message);
+        }
 
         // 3. Save the Supabase path in the database.
         // Do not save the Windows path here because Preview downloads
@@ -541,7 +550,7 @@ export default function StudentProfile({ studentId, onBack }) {
 
         if (insertError) {
           throw new Error(
-            `The file was saved to the local folder at ${localPath}, but its database record could not be created: ${insertError.message}`
+            `The file was uploaded${localPath ? ` and saved to ${localPath}` : ""}, but its database record could not be created: ${insertError.message}`
           );
         }
 
