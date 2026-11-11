@@ -582,19 +582,35 @@ export default function OCRConfirmation({
   const [saving, setSaving] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const scrollRef = useRef(null);
-
-  // Load document types once for the whole batch.
+   // Load document types for the whole batch:
+  // standard types (no student, not a group) + this student's custom types.
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
       try {
-        const { data, error } = await supabase
+        const numericStudentId = Number(studentId);
+        const hasStudent =
+          studentKnown && Number.isFinite(numericStudentId);
+
+        let query = supabase
           .from("tbl_documents")
           .select("document_id, document_name")
-          .eq("is_enrollment_requirement", true)
           .order("document_name");
+
+        if (hasStudent) {
+          query = query.or(
+            `and(student_id.is.null,is_group.eq.false,is_enrollment_requirement.eq.true),` +
+              `and(student_id.eq.${numericStudentId},is_group.eq.false)`
+          );
+        } else {
+          query = query
+            .is("student_id", null)
+            .eq("is_group", false)
+            .eq("is_enrollment_requirement", true);
+        }
+
+        const { data, error } = await query;
 
         if (cancelled) return;
 
@@ -624,19 +640,7 @@ export default function OCRConfirmation({
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  const handlePanelChange = useCallback((id, next) => {
-    setStates((prev) => {
-      const current = prev[id];
-
-      if (current && Object.keys(next).every((k) => current[k] === next[k])) {
-        return prev;
-      }
-
-      return { ...prev, [id]: next };
-    });
-  }, []);
+  }, [studentId, studentKnown]);
 
   // ----------------------------------------------------------
   // BATCH LOGIC

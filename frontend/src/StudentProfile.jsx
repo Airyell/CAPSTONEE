@@ -11,8 +11,7 @@ import "./styles/Dashboard.css";
 const BUCKET = "student-documents";
 
 // Local Flask scanner server.
-const FOLDER_SERVER =
-  import.meta.env.VITE_FOLDER_SERVER_URL || "http://127.0.0.1:5000";
+const FOLDER_SERVER = "http://127.0.0.1:5000";
 
 const statuses = ["Active", "LOA", "Inactive", "Graduated"];
 
@@ -50,6 +49,10 @@ const credentialNames = [
 
 const initialCredentials = credentialNames.map((name) => ({
   name,
+  document_id: null,
+  parent_id: null,
+  is_group: false,
+  custom: false,
   date: null,
   status: "Not Uploaded",
   file: null,
@@ -201,6 +204,7 @@ export default function StudentProfile({ studentId, onBack }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
   // Document Upload
   const uploadInputRef = useRef(null);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -213,6 +217,13 @@ export default function StudentProfile({ studentId, onBack }) {
   // Edit
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState(initialStudent);
+
+  // Groups + per-student custom document types
+  const [openGroups, setOpenGroups] = useState({});
+  const [showAddType, setShowAddType] = useState(false);
+  const [newTypeName, setNewTypeName] = useState("");
+  const [newTypeParent, setNewTypeParent] = useState("");
+  const [addingType, setAddingType] = useState(false);
 
   const showEditModalRef = useRef(showEditModal);
 
@@ -336,31 +347,101 @@ export default function StudentProfile({ studentId, onBack }) {
   // LOAD SAVED DOCUMENTS
   // ============================================================
 
+  // Loads the standard document types (student_id is null) plus the
+  // custom types that belong to this student only, then merges in
+  // the latest upload for each type.
   const loadDocuments = async (sid) => {
-    const { data, error: docError } = await supabase
-      .from("tbl_student_documents")
-      .select(
-        "student_documents_id, document_id, document_name, file_path, date_uploaded, status, tbl_documents(document_name)"
-      )
-      .eq("student_id", sid)
-      .order("date_uploaded", { ascending: false });
+    const [docRes, typeRes] = await Promise.all([
+      supabase
+        .from("tbl_student_documents")
+        .select(
+          "student_documents_id, document_id, document_name, file_path, date_uploaded, status, tbl_documents(document_name)"
+        )
+        .eq("student_id", sid)
+        .order("date_uploaded", { ascending: false }),
 
-    if (docError) throw docError;
+      supabase
+        .from("tbl_documents")
+        .select(
+          "document_id, document_name, parent_id, student_id, is_group"
+        )
+        .or(`student_id.is.null,student_id.eq.${sid}`),
+    ]);
 
-    const merged = initialCredentials.map((c) => ({ ...c }));
+    if (docRes.error) throw docRes.error;
+    if (typeRes.error) throw typeRes.error;
+
+    const types = typeRes.data || [];
+
+    // 1. The standard credential rows, linked to their document_id.
+    const merged = initialCredentials.map((c) => {
+      const t = types.find(
+        (t) => !t.student_id && norm(t.document_name) === norm(c.name)
+      );
+
+      return { ...c, document_id: t?.document_id ?? null };
+    });
+
+    // 2. Groups (e.g. Grades), sub-types, and this student's custom
+    // types are always shown, even before anything is uploaded.
+    for (const t of types) {
+      if (merged.some((c) => c.document_id === t.document_id)) continue;
+
+      if (!(t.is_group || t.student_id || t.parent_id)) continue;
+
+      merged.push({
+        name: t.document_name,
+        document_id: t.document_id,
+        parent_id: t.parent_id,
+        is_group: !!t.is_group,
+        custom: !!t.student_id,
+        date: null,
+        status: "Not Uploaded",
+        file: null,
+        file_path: null,
+        file_url: null,
+      });
+    }
+
+    // 3. Merge the latest upload for each document type.
     const seen = new Set();
 
-    for (const row of data || []) {
+    for (const row of docRes.data || []) {
       // Rows are newest first: display only the latest upload
       // for each document type.
       if (seen.has(row.document_id)) continue;
       seen.add(row.document_id);
 
-      const typeName =
-        row.tbl_documents?.document_name || "Document";
+      let idx = merged.findIndex(
+        (c) => c.document_id === row.document_id
+      );
 
-      const entry = {
-        name: typeName,
+      // A standard type that is not in the default list is shown
+      // only once the student has an upload for it.
+      if (idx < 0) {
+        const t = types.find((t) => t.document_id === row.document_id);
+
+        merged.push({
+          name:
+            t?.document_name ||
+            row.tbl_documents?.document_name ||
+            "Document",
+          document_id: row.document_id,
+          parent_id: t?.parent_id ?? null,
+          is_group: false,
+          custom: !!t?.student_id,
+          date: null,
+          status: "Not Uploaded",
+          file: null,
+          file_path: null,
+          file_url: null,
+        });
+
+        idx = merged.length - 1;
+      }
+
+      merged[idx] = {
+        ...merged[idx],
         date: row.date_uploaded
           ? row.date_uploaded.split("T")[0]
           : null,
@@ -372,22 +453,70 @@ export default function StudentProfile({ studentId, onBack }) {
         file_path: row.file_path,
         file_url: null,
       };
-
-      const idx = merged.findIndex(
-        (c) => norm(c.name) === norm(typeName)
-      );
-
-      if (idx >= 0) {
-        merged[idx] = {
-          ...entry,
-          name: merged[idx].name,
-        };
-      } else {
-        merged.push(entry);
-      }
     }
 
     setCredentials(merged);
+  };
+
+  // ============================================================
+  // ADD DOCUMENT TYPE (this student only)
+  // ============================================================
+
+  const handleAddType = async () => {
+    const name = newTypeName.trim();
+
+    if (!name) return;
+
+    const parentId = newTypeParent ? Number(newTypeParent) : null;
+
+    const duplicate = credentials.some(
+      (c) =>
+        norm(c.name) === norm(name) &&
+        (c.parent_id || null) === parentId
+    );
+
+    if (duplicate) {
+      setError(`"${name}" already exists for this student.`);
+      return;
+    }
+
+    try {
+      setAddingType(true);
+      setError("");
+
+      const { error: insertError } = await supabase
+        .from("tbl_documents")
+        .insert({
+          document_name: name,
+          student_id: student.student_id,
+          parent_id: parentId,
+          is_group: false,
+          is_enrollment_requirement: false,
+        });
+
+      if (insertError) throw insertError;
+
+      logActivity({
+        type: "Create",
+        description: `Added document type "${name}" for student ${student.student_id}`,
+        module: "Documents Module",
+      });
+
+      if (parentId) {
+        setOpenGroups((prev) => ({ ...prev, [parentId]: true }));
+      }
+
+      setShowAddType(false);
+      setNewTypeName("");
+      setNewTypeParent("");
+
+      await loadDocuments(student.student_id);
+    } catch (err) {
+      console.error("Add document type failed:", err);
+      setError(err.message || "Failed to add document type.");
+    } finally {
+      setAddingType(false);
+    }
   };
 
   // ============================================================
@@ -468,6 +597,7 @@ export default function StudentProfile({ studentId, onBack }) {
         }
 
         // Resolve the document type ID.
+        // Scoped to standard types and this student's own custom types.
         let docId = documentId;
 
         if (!docId && documentType) {
@@ -475,6 +605,8 @@ export default function StudentProfile({ studentId, onBack }) {
             .from("tbl_documents")
             .select("document_id")
             .ilike("document_name", documentType)
+            .or(`student_id.is.null,student_id.eq.${sid}`)
+            .limit(1)
             .maybeSingle();
 
           if (docError) throw docError;
@@ -516,19 +648,11 @@ export default function StudentProfile({ studentId, onBack }) {
         // 2. Save a copy to the local student folder using Flask.
         // Example:
         // C:\StudentRecords\CEA\2026302405_Arielle_Vermoy_Dades\
-        // The local copy is optional: it only works on the computer that
-        // runs the folder service. Supabase remains the copy of record.
-        let localPath = null;
-
-        try {
-          localPath = await saveToLocalFolder({
-            blob: uploaded.blob,
-            name: uploaded.name,
-            documentName: typeName,
-          });
-        } catch (localErr) {
-          console.warn("Local folder copy skipped:", localErr.message);
-        }
+        const localPath = await saveToLocalFolder({
+          blob: uploaded.blob,
+          name: uploaded.name,
+          documentName: typeName,
+        });
 
         // 3. Save the Supabase path in the database.
         // Do not save the Windows path here because Preview downloads
@@ -550,7 +674,7 @@ export default function StudentProfile({ studentId, onBack }) {
 
         if (insertError) {
           throw new Error(
-            `The file was uploaded${localPath ? ` and saved to ${localPath}` : ""}, but its database record could not be created: ${insertError.message}`
+            `The file was saved to the local folder at ${localPath}, but its database record could not be created: ${insertError.message}`
           );
         }
 
@@ -583,46 +707,46 @@ export default function StudentProfile({ studentId, onBack }) {
           }
         }
 
-                // The confirmation shows this error beside the failed document.
+        // The confirmation shows this error beside the failed document.
         throw err;
       }
     },
   });
 
   // ============================================================
-// UPLOAD DOCUMENT USING OCR
-// ============================================================
+  // UPLOAD DOCUMENT USING OCR
+  // ============================================================
 
-const handleDocumentUpload = async (e) => {
-  const files = Array.from(e.target.files || []);
+  const handleDocumentUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
 
-  // Allow selecting the same files again.
-  e.target.value = "";
+    // Allow selecting the same files again.
+    e.target.value = "";
 
-  if (!files.length) return;
+    if (!files.length) return;
 
-  if (!student.student_id) {
-    alert("No student is selected.");
-    return;
-  }
+    if (!student.student_id) {
+      alert("No student is selected.");
+      return;
+    }
 
-  try {
-    setUploadingFile(true);
-    setError("");
+    try {
+      setUploadingFile(true);
+      setError("");
 
-    // The hook checks each file's format and skips unsupported ones.
-    await scanner.upload(files);
-  } catch (err) {
-    console.error("Document upload OCR error:", err);
+      // The hook checks each file's format and skips unsupported ones.
+      await scanner.upload(files);
+    } catch (err) {
+      console.error("Document upload OCR error:", err);
 
-    alert(
-      err.message ||
-        "Failed to upload and process the document. Please try again."
-    );
-  } finally {
-    setUploadingFile(false);
-  }
-};
+      alert(
+        err.message ||
+          "Failed to upload and process the document. Please try again."
+      );
+    } finally {
+      setUploadingFile(false);
+    }
+  };
 
   // ============================================================
   // LOAD COLLEGES, PROGRAMS, STUDENT AND DOCUMENTS
@@ -850,6 +974,29 @@ const handleDocumentUpload = async (e) => {
       .join("")
       .slice(0, 2) || "ST";
 
+  // Credential grouping
+  const groups = credentials.filter((c) => c.is_group);
+  const topLevel = credentials.filter((c) => !c.parent_id);
+  const childrenOf = (id) =>
+    credentials.filter((c) => c.parent_id === id);
+
+  // Only standard, top-level documents count toward the verified total.
+  // Groups and per-student custom types are optional.
+  const countable = credentials.filter(
+    (c) => !c.is_group && !c.custom && !c.parent_id
+  );
+
+  // Rows currently visible in the table (children only when expanded).
+  const visibleRows = topLevel.flatMap((cred) => [
+    { cred, indent: false },
+    ...(cred.is_group && openGroups[cred.document_id]
+      ? childrenOf(cred.document_id).map((kid) => ({
+          cred: kid,
+          indent: true,
+        }))
+      : []),
+  ]);
+
   // ============================================================
   // PREVIEW
   // ============================================================
@@ -996,6 +1143,87 @@ const handleDocumentUpload = async (e) => {
   }
 
   // ============================================================
+  // CREDENTIAL ROW
+  // ============================================================
+
+  const renderRow = ({ cred, indent }, i) => {
+    const kids = cred.is_group ? childrenOf(cred.document_id) : [];
+    const open = !!openGroups[cred.document_id];
+
+    return (
+      <tr
+        key={cred.document_id ?? cred.name}
+        className={
+          i % 2 === 0
+            ? "credentials-row-even"
+            : "credentials-row-odd"
+        }
+      >
+        <td
+          className="credentials-td-first"
+          style={indent ? { paddingLeft: "2.5rem" } : undefined}
+        >
+          {cred.is_group ? (
+            <button
+              type="button"
+              className="cred-preview-btn"
+              onClick={() =>
+                setOpenGroups((prev) => ({
+                  ...prev,
+                  [cred.document_id]: !open,
+                }))
+              }
+            >
+              {open ? "▾" : "▸"} {cred.name}
+            </button>
+          ) : (
+            cred.name
+          )}
+        </td>
+
+        <td className="credentials-td">
+          {cred.is_group ? "—" : cred.date ?? "—"}
+        </td>
+
+        <td className="credentials-td">
+          {cred.is_group ? (
+            <span className="cred-not-uploaded">
+              {verifiedCount(kids)}/{kids.length}
+            </span>
+          ) : (
+            <span className={credStatusClass(cred.status)}>
+              {cred.status}
+            </span>
+          )}
+        </td>
+
+        <td className="credentials-td-file">
+          {cred.file ? (
+            cred.file
+          ) : (
+            <span className="text-gray-300">
+              {cred.is_group ? "" : "No file"}
+            </span>
+          )}
+        </td>
+
+        <td className="credentials-td">
+          <div style={{ display: "flex", gap: "8px" }}>
+            {cred.file && (
+              <button
+                className="cred-preview-btn"
+                onClick={() => handlePreview(cred)}
+              >
+                Preview
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
+  // ============================================================
   // PAGE
   // ============================================================
 
@@ -1047,83 +1275,83 @@ const handleDocumentUpload = async (e) => {
           </div>
 
           <div
-  className="profile-header-actions"
-  style={{
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: "10px",
-    width: "50%",
-    maxWidth: "300px",
-    margin: "15px auto 0",
-  }}
->
-  {/* SCAN DOCUMENT */}
-  <button
-    className="profile-edit-btn"
-    style={{
-      width: "100%",
-      margin: 0,
-      padding: "10px",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      textAlign: "center",
-      boxSizing: "border-box",
-    }}
-    onClick={() => scanner.open()}
-    disabled={uploadingFile}
-  >
-    Scan Document
-  </button>
+            className="profile-header-actions"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: "10px",
+              width: "50%",
+              maxWidth: "300px",
+              margin: "15px auto 0",
+            }}
+          >
+            {/* SCAN DOCUMENT */}
+            <button
+              className="profile-edit-btn"
+              style={{
+                width: "100%",
+                margin: 0,
+                padding: "10px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+                boxSizing: "border-box",
+              }}
+              onClick={() => scanner.open()}
+              disabled={uploadingFile}
+            >
+              Scan Document
+            </button>
 
-  {/* UPLOAD DOCUMENT */}
-  <button
-    className="profile-edit-btn"
-    style={{
-      width: "100%",
-      margin: 0,
-      padding: "10px",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      textAlign: "center",
-      boxSizing: "border-box",
-    }}
-    onClick={() => uploadInputRef.current?.click()}
-    disabled={uploadingFile}
-  >
-    {uploadingFile ? "Processing..." : "Upload Document"}
-  </button>
+            {/* UPLOAD DOCUMENT */}
+            <button
+              className="profile-edit-btn"
+              style={{
+                width: "100%",
+                margin: 0,
+                padding: "10px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+                boxSizing: "border-box",
+              }}
+              onClick={() => uploadInputRef.current?.click()}
+              disabled={uploadingFile}
+            >
+              {uploadingFile ? "Processing..." : "Upload Document"}
+            </button>
 
-  {/* HIDDEN FILE INPUT */}
-  <input
-    ref={uploadInputRef}
-    type="file"
-    multiple
-    accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff"
-    style={{ display: "none" }}
-    onChange={handleDocumentUpload}
-  />
+            {/* HIDDEN FILE INPUT */}
+            <input
+              ref={uploadInputRef}
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff"
+              style={{ display: "none" }}
+              onChange={handleDocumentUpload}
+            />
 
-  {/* EDIT INFORMATION */}
-  <button
-    className="profile-edit-btn"
-    style={{
-      gridColumn: "1 / -1",
-      justifySelf: "center",
-      width: "fit-content",
-      margin: 0,
-      textAlign: "center",
-    }}
-    onClick={() => {
-      setEditForm(student);
-      setShowEditModal(true);
-    }}
-  >
-    Edit Information
-  </button>
-</div>
-    </div>
+            {/* EDIT INFORMATION */}
+            <button
+              className="profile-edit-btn"
+              style={{
+                gridColumn: "1 / -1",
+                justifySelf: "center",
+                width: "fit-content",
+                margin: 0,
+                textAlign: "center",
+              }}
+              onClick={() => {
+                setEditForm(student);
+                setShowEditModal(true);
+              }}
+            >
+              Edit Information
+            </button>
+          </div>
+        </div>
 
         {/* STUDENT INFORMATION */}
         <div className="profile-info-card">
@@ -1155,9 +1383,25 @@ const handleDocumentUpload = async (e) => {
               Credential Documents
             </h3>
 
-            <span className="credentials-count">
-              {verifiedCount(credentials)}/{credentials.length} verified
-            </span>
+            <div
+              style={{
+                display: "flex",
+                gap: "12px",
+                alignItems: "center",
+              }}
+            >
+              <button
+                className="profile-edit-btn"
+                style={{ margin: 0 }}
+                onClick={() => setShowAddType(true)}
+              >
+                + Add document type
+              </button>
+
+              <span className="credentials-count">
+                {verifiedCount(countable)}/{countable.length} verified
+              </span>
+            </div>
           </div>
 
           <table className="credentials-table">
@@ -1175,54 +1419,7 @@ const handleDocumentUpload = async (e) => {
               </tr>
             </thead>
 
-            <tbody>
-              {credentials.map((cred, i) => (
-                <tr
-                  key={cred.name}
-                  className={
-                    i % 2 === 0
-                      ? "credentials-row-even"
-                      : "credentials-row-odd"
-                  }
-                >
-                  <td className="credentials-td-first">
-                    {cred.name}
-                  </td>
-
-                  <td className="credentials-td">
-                    {cred.date ?? "—"}
-                  </td>
-
-                  <td className="credentials-td">
-                    <span className={credStatusClass(cred.status)}>
-                      {cred.status}
-                    </span>
-                  </td>
-
-                  <td className="credentials-td-file">
-                    {cred.file ? (
-                      cred.file
-                    ) : (
-                      <span className="text-gray-300">No file</span>
-                    )}
-                  </td>
-
-                  {/* CHANGED: per-row Scan / Rescan buttons removed; only Preview remains */}
-                  <td className="credentials-td">
-                    <div style={{ display: "flex", gap: "8px" }}>
-                      {cred.file && (
-                        <button
-                          className="cred-preview-btn"
-                          onClick={() => handlePreview(cred)}
-                        >
-                          Preview
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+            <tbody>{visibleRows.map(renderRow)}</tbody>
           </table>
         </div>
       </div>
@@ -1233,6 +1430,66 @@ const handleDocumentUpload = async (e) => {
         studentId={student.student_id}
         studentName={fullName}
       />
+
+      {/* ADD DOCUMENT TYPE MODAL */}
+      {showAddType && (
+        <div
+          className="modal-overlay"
+          onClick={() => setShowAddType(false)}
+        >
+          <div
+            className="edit-modal-card"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="edit-modal-title">Add Document Type</h3>
+
+            <p className="edit-modal-sub">
+              This will only appear on this student's profile.
+            </p>
+
+            <label className="edit-label">Document Name</label>
+            <input
+              className="edit-input"
+              value={newTypeName}
+              onChange={(e) => setNewTypeName(e.target.value)}
+              placeholder="e.g. INC"
+            />
+
+            <label className="edit-label">Group (optional)</label>
+            <select
+              className="edit-select"
+              value={newTypeParent}
+              onChange={(e) => setNewTypeParent(e.target.value)}
+            >
+              <option value="">None (standalone)</option>
+
+              {groups.map((g) => (
+                <option key={g.document_id} value={g.document_id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+
+            <div className="edit-footer">
+              <button
+                className="edit-cancel-btn"
+                onClick={() => setShowAddType(false)}
+                disabled={addingType}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="edit-save-btn"
+                onClick={handleAddType}
+                disabled={addingType || !newTypeName.trim()}
+              >
+                {addingType ? "Saving..." : "Add"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PREVIEW MODAL */}
       {showPreviewModal && previewCred && (
@@ -1265,7 +1522,7 @@ const handleDocumentUpload = async (e) => {
                     }}
                   />
                 ) : (
-                                                      <>
+                  <>
                     <div
                       style={{
                         maxHeight: "400px",
