@@ -1,6 +1,6 @@
 // Base URL of the local Flask scanner service
 export const SCANNER_URL = "http://127.0.0.1:5000";
-export const OCR_URL = "http://127.0.0.1:5001/ocr";
+export const OCR_URL = import.meta.env.VITE_OCR_URL || "http://127.0.0.1:5001/ocr";
 
 // Make sure a scanner-returned URL is absolute
 // Flask may return "/scans/x.jpg"
