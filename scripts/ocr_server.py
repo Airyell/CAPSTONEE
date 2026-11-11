@@ -23,7 +23,26 @@ from document_classifier import (
 app = Flask(__name__)
 CORS(app)
 
+# Allow requests from your deployed frontend
+CORS(app, resources={
+    r"/*": {
+        "origins": [
+            "https://YOUR-VERCEL-DOMAIN.vercel.app",
+            "http://localhost:5173"
+        ]
+    }
+})
 
+@app.route("/health", methods=["GET"])
+def health():
+    return {
+        "status": "ok",
+        "service": "RegisScan OCR"
+    }, 200
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
 # ============================================================
 # CLASSIFIER STATUS
 # ============================================================
