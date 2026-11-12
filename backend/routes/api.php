@@ -82,3 +82,5 @@ Route::post('staff/{staff}/login',  [StaffController::class, 'setActive']);
 Route::post('staff/{staff}/logout', [StaffController::class, 'setInactive']);
 
 Route::post('/students', [StudentController::class, 'store']);
+
+use App\Http\Controllers\RequestNotificationController;

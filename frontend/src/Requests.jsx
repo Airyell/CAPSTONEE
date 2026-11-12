@@ -1,10 +1,13 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { supabase } from "./supabaseClient"; 
 import { logActivity } from "./activityLog"; // ADDED
+import { authHeaders } from "./rbac";
 import "./styles/Requests.css";
 
 const PAGE_SIZE = 10;
 
+const API_BASE =
+  import.meta.env?.VITE_API_BASE_URL || "https://regisscan.onrender.com/api";
 
 function deriveStatus(docs) {
   if (docs.length === 0) return "Pending";
@@ -704,6 +707,30 @@ export default function Requests() {
         description: `Rejected request ${request?.displayId} (${request?.studentName})`,
         module: "Requests Module",
       });
+
+      // ADDED: email the student about the rejection
+      try {
+        const res = await fetch(`${API_BASE}/requests/${id}/notify-rejection`, {
+          method: "POST",
+          headers: authHeaders(),
+        });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(out.message || `HTTP ${res.status}`);
+
+        logActivity({
+          type: "Update",
+          description: `Sent rejection email to ${request?.studentName} for request ${request?.displayId}`,
+          module: "Requests Module",
+        });
+      } catch (emailErr) {
+        logActivity({
+          type: "Update",
+          description: `Rejection email failed for request ${request?.displayId}: ${emailErr.message}`,
+          module: "Requests Module",
+          status: "failed",
+        });
+        setError(`Request rejected, but the email was not sent: ${emailErr.message}`);
+      }
     }
 
     // Reflect the change locally instead of a full refetch. The
