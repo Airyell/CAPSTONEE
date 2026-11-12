@@ -20,19 +20,27 @@ from document_classifier import (
 )
 
 
-app = Flask(__name__)
 
-ALLOWED_ORIGINS = [
-    "https://capstonee-rnrrzkmq8-regis-scan.vercel.app",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173"
-]
+from flask import Flask
+from flask_cors import CORS
+
+app = Flask(__name__)
 
 CORS(
     app,
     resources={
         r"/*": {
-            "origins": ALLOWED_ORIGINS
+            "origins": [
+                # RegisScan production domain
+                r"^https://capstonee-eight\.vercel\.app$",
+
+                # Automatic RegisScan Vercel preview deployments
+                r"^https://capstonee-[a-z0-9-]+-regis-scan\.vercel\.app$",
+
+                # Local development
+                r"^http://localhost:5173$",
+                r"^http://127\.0\.0\.1:5173$"
+            ]
         }
     },
     methods=["GET", "POST", "OPTIONS"],
@@ -40,6 +48,7 @@ CORS(
     supports_credentials=False,
     max_age=3600
 )
+
 
 # ============================================================
 # CLASSIFIER STATUS

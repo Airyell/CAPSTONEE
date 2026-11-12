@@ -208,6 +208,7 @@ function ItemPanel({
     );
 
     setSuggested(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docs, item.id]);
 
   // 2. Verify the student record from a name.
@@ -571,6 +572,8 @@ export default function OCRConfirmation({
   onRemove,
   onSave,
 }) {
+  const scrollRef = useRef(null);
+
   const studentKnown =
     studentId !== undefined && studentId !== null && studentId !== "";
 
@@ -582,7 +585,15 @@ export default function OCRConfirmation({
   const [saving, setSaving] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
-   // Load document types for the whole batch:
+  // Each ItemPanel reports its state here.
+  const handlePanelChange = useCallback((itemId, value) => {
+    setStates((prev) => ({
+      ...prev,
+      [itemId]: value,
+    }));
+  }, []);
+
+  // Load document types for the whole batch:
   // standard types (no student, not a group) + this student's custom types.
   useEffect(() => {
     let cancelled = false;
