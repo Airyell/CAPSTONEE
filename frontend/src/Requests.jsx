@@ -114,8 +114,12 @@ function formatDateTime(value) {
   });
 }
 
-function formatRequestId(id) {
-  const year = new Date().getFullYear();
+// CHANGED: uses the year of the request itself (same as the Laravel email),
+// so the ID shown here always matches the ID in the email.
+function formatRequestId(id, dateRequest) {
+  const parsed = dateRequest ? new Date(dateRequest) : null;
+  const year =
+    parsed && !isNaN(parsed.getTime()) ? parsed.getFullYear() : new Date().getFullYear();
   return `REQ-${year}-${String(id).padStart(3, "0")}`;
 }
 
@@ -270,9 +274,13 @@ function RejectEmailModal({ request, sending, errorMessage, onBack, onSend }) {
               rows={4}
               disabled={sending}
               autoFocus
-              placeholder="e.g. Lack of Form 137"
+              placeholder="e.g. Missing requirement: Form 137 (Permanent Record)."
               className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-[#1f1d70] focus:outline-none disabled:opacity-50"
             />
+            <p className="mt-1 text-xs text-gray-400">
+              This message will appear in the email. Please write it in a formal tone.
+              No need to include a greeting such as &quot;Dear ...&quot;.
+            </p>
           </div>
 
           {errorMessage && (
@@ -348,7 +356,7 @@ function RequestDetailsModal({ request, onClose, onSetDueDate, onCancel, cancell
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-          <div className="flex items-start justify-between border-b border-gray-100 px-8 py-6">
+        <div className="flex items-start justify-between border-b border-gray-100 px-8 py-6">
           <div>
             <h3 className="text-lg font-semibold text-[#1f1d70]">{r.displayId}</h3>
             <p className="text-sm text-gray-500">{r.studentName} · ID {r.studentId}</p>
@@ -415,78 +423,78 @@ function RequestDetailsModal({ request, onClose, onSetDueDate, onCancel, cancell
           </div>
 
           {/* ── Student's submitted form (read-only) ── */}
-<div className="mb-5 mt-8">
-  <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-[#D4A017]">
-    Submitted · {formatDateTime(r.requestDate)}
-  </p>
-  <h4 className="text-lg font-black text-[#1f1d70]">Request Form</h4>
-</div>
+          <div className="mb-5 mt-8">
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-[#D4A017]">
+              Submitted · {formatDateTime(r.requestDate)}
+            </p>
+            <h4 className="text-lg font-black text-[#1f1d70]">Request Form</h4>
+          </div>
 
-<FormSection>
-  <FormField label="Contact Number" value={r.contactNumber} />
-</FormSection>
+          <FormSection>
+            <FormField label="Contact Number" value={r.contactNumber} />
+          </FormSection>
 
-<YesNoField label="Are you a graduate?" value={r.isGraduate}>
-  {r.isGraduate === true && (
-    <FormField label="Year of Graduation" value={r.graduateYear} />
-  )}
-  {r.isGraduate === false && (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-      <FormField label="Last Semester" value={r.lastSemester} />
-      <FormField label="S.Y. Start" value={r.lastSyStart} />
-      <FormField label="S.Y. End" value={r.lastSyEnd} />
-    </div>
-  )}
-</YesNoField>
+          <YesNoField label="Are you a graduate?" value={r.isGraduate}>
+            {r.isGraduate === true && (
+              <FormField label="Year of Graduation" value={r.graduateYear} />
+            )}
+            {r.isGraduate === false && (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <FormField label="Last Semester" value={r.lastSemester} />
+                <FormField label="S.Y. Start" value={r.lastSyStart} />
+                <FormField label="S.Y. End" value={r.lastSyEnd} />
+              </div>
+            )}
+          </YesNoField>
 
-<YesNoField label="Have you previously requested credentials?" value={r.requestedBefore}>
-  {r.requestedBefore === true && (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <FormField label="Credential" value={r.previousCredential} />
-      <FormField label="Date of Request" value={r.previousRequestDate ? formatDate(r.previousRequestDate) : null} />
-    </div>
-  )}
-</YesNoField>
+          <YesNoField label="Have you previously requested credentials?" value={r.requestedBefore}>
+            {r.requestedBefore === true && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormField label="Credential" value={r.previousCredential} />
+                <FormField label="Date of Request" value={r.previousRequestDate ? formatDate(r.previousRequestDate) : null} />
+              </div>
+            )}
+          </YesNoField>
 
-<YesNoField label="Cleared?" value={r.isCleared} />
+          <YesNoField label="Cleared?" value={r.isCleared} />
 
 
-<div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-  <FormField label="Student ID" value={r.studentId} />
-  <FormField label="Full Name" value={r.studentName} />
-  <FormField label="Email Address" value={r.email} />
-  <FormField label="Course" value={r.course} />
-  <FormField label="Year Level" value={r.yearLevel} />
-  <FormField
-    label="Request Type"
-    value={r.docs.map(d => d.name).join(", ")}
-    className="sm:col-span-2"
-  />
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <FormField label="Student ID" value={r.studentId} />
+            <FormField label="Full Name" value={r.studentName} />
+            <FormField label="Email Address" value={r.email} />
+            <FormField label="Course" value={r.course} />
+            <FormField label="Year Level" value={r.yearLevel} />
+            <FormField
+              label="Request Type"
+              value={r.docs.map(d => d.name).join(", ")}
+              className="sm:col-span-2"
+            />
 
-  {r.agency && (
-    <FormField
-      label="Requesting Agency"
-      value={r.agency === "Other" ? (r.agencyOther || "Other") : r.agency}
-      className="sm:col-span-2"
-    />
-  )}
-  {r.certificationType && (
-    <FormField
-      label="Certification Type"
-      value={r.certificationType === "Others" ? (r.certificationOther || "Others") : r.certificationType}
-      className="sm:col-span-2"
-    />
-  )}
-  {(r.subjectSemester || r.subjectSyStart || r.subjectSyEnd) && (
-    <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-3">
-      <FormField label="Semester" value={r.subjectSemester} />
-      <FormField label="S.Y. Start" value={r.subjectSyStart} />
-      <FormField label="S.Y. End" value={r.subjectSyEnd} />
-    </div>
-  )}
+            {r.agency && (
+              <FormField
+                label="Requesting Agency"
+                value={r.agency === "Other" ? (r.agencyOther || "Other") : r.agency}
+                className="sm:col-span-2"
+              />
+            )}
+            {r.certificationType && (
+              <FormField
+                label="Certification Type"
+                value={r.certificationType === "Others" ? (r.certificationOther || "Others") : r.certificationType}
+                className="sm:col-span-2"
+              />
+            )}
+            {(r.subjectSemester || r.subjectSyStart || r.subjectSyEnd) && (
+              <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-3">
+                <FormField label="Semester" value={r.subjectSemester} />
+                <FormField label="S.Y. Start" value={r.subjectSyStart} />
+                <FormField label="S.Y. End" value={r.subjectSyEnd} />
+              </div>
+            )}
 
-  <FormField label="Purpose of Request" value={r.purpose} className="sm:col-span-2" />
-</div>
+            <FormField label="Purpose of Request" value={r.purpose} className="sm:col-span-2" />
+          </div>
         </div>
 
         {/* Footer */}
@@ -675,7 +683,8 @@ export default function Requests() {
       }));
       return {
         id: r.request_id,
-        displayId: formatRequestId(r.request_id),
+        // CHANGED: pass the request date so the year matches the email
+        displayId: formatRequestId(r.request_id, r.date_request),
         studentId: r.student?.student_id ?? r.student_id,
         studentName: studentFullName(r.student),
         email: r.student?.email,

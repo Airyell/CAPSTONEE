@@ -43,18 +43,11 @@ class RequestNotificationController extends Controller
         $displayId = sprintf('REQ-%s-%03d', date('Y', strtotime($req->date_request)), $req->request_id);
         $plainName = trim("{$req->first_name} {$req->last_name}");
 
-        $items = '';
-        foreach ($docs as $doc) {
-            $items .= '<p><strong>' . e($doc->document_name) . '</strong><br>'
-                    . 'Reason: ' . e($doc->rejection_reason) . '</p>';
-        }
-
-        $html = '<p>Hello ' . e($plainName) . ',</p>'
-              . "<p>Your request <strong>{$displayId}</strong> was rejected.</p>"
-              . $items
-              . "<p>Please submit the missing requirement to the Registrar's Office, then file a new request. "
-              . 'You can also check your status on the Track Requests page using your Student ID.</p>'
-              . '<p>USTP Registrar</p>';
+        $html = view('emails.request-rejected', [
+    'studentName' => $plainName,
+    'displayId'   => $displayId,
+    'docs'        => $docs,
+])->render();
 
         try {
             $response = Http::withHeaders([
