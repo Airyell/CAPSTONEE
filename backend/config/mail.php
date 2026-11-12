@@ -115,4 +115,8 @@ return [
         ],
     ],
 
+    'resend' => [
+    'transport' => 'resend',
+],
+
 ];
