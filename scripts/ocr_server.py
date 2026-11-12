@@ -22,14 +22,24 @@ from document_classifier import (
 
 app = Flask(__name__)
 
-# Allowed frontend origins, comma-separated. Set ALLOWED_ORIGINS on Render,
-# e.g. https://your-app.vercel.app
 ALLOWED_ORIGINS = [
-    o.strip()
-    for o in os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
-    if o.strip()
+    "https://capstonee-rnrrzkmq8-regis-scan.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
 ]
-CORS(app, resources={r"/*": {"origins": ALLOWED_ORIGINS}})
+
+CORS(
+    app,
+    resources={
+        r"/*": {
+            "origins": ALLOWED_ORIGINS
+        }
+    },
+    methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+    supports_credentials=False,
+    max_age=3600
+)
 
 # ============================================================
 # CLASSIFIER STATUS
