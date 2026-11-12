@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
 class RequestNotificationController extends Controller
 {
-    public function notifyRejection($requestId)
+    public function notifyRejection(Request $request, $requestId)
     {
         $req = DB::table('tbl_request as r')
             ->join('tbl_student as s', 's.student_id', '=', 'r.student_id')
@@ -19,8 +20,12 @@ class RequestNotificationController extends Controller
             return response()->json(['message' => 'Request not found.'], 404);
         }
 
-        if (!$req->email) {
-            return response()->json(['message' => 'This student has no email on file.'], 422);
+        // Use the email typed in the modal; fall back to the student's saved email
+        $typed = trim((string) $request->input('email', ''));
+        $toEmail = filter_var($typed, FILTER_VALIDATE_EMAIL) ? $typed : $req->email;
+
+        if (!$toEmail) {
+            return response()->json(['message' => 'No valid email address.'], 422);
         }
 
         $docs = DB::table('tbl_request_document as rd')
@@ -36,7 +41,7 @@ class RequestNotificationController extends Controller
         }
 
         $displayId = sprintf('REQ-%s-%03d', date('Y', strtotime($req->date_request)), $req->request_id);
-        $name = e(trim("{$req->first_name} {$req->last_name}"));
+        $plainName = trim("{$req->first_name} {$req->last_name}");
 
         $items = '';
         foreach ($docs as $doc) {
@@ -44,28 +49,36 @@ class RequestNotificationController extends Controller
                     . 'Reason: ' . e($doc->rejection_reason) . '</p>';
         }
 
-        $html = "<p>Hello {$name},</p>"
+        $html = '<p>Hello ' . e($plainName) . ',</p>'
               . "<p>Your request <strong>{$displayId}</strong> was rejected.</p>"
               . $items
               . "<p>Please submit the missing requirement to the Registrar's Office, then file a new request. "
-              . "You can also check your status on the Track Requests page using your Student ID.</p>"
-              . "<p>USTP Registrar</p>";
+              . 'You can also check your status on the Track Requests page using your Student ID.</p>'
+              . '<p>USTP Registrar</p>';
 
         try {
-            $response = Http::withToken(config('services.resend.key'))
-                ->post('https://api.resend.com/emails', [
-                    'from'    => config('mail.from.name') . ' <' . config('mail.from.address') . '>',
-                    'to'      => [$req->email],
-                    'subject' => "Your document request {$displayId} was rejected",
-                    'html'    => $html,
-                ]);
+            $response = Http::withHeaders([
+                'api-key' => config('services.brevo.key'),
+                'accept'  => 'application/json',
+            ])->post('https://api.brevo.com/v3/smtp/email', [
+                'sender' => [
+                    'name'  => config('mail.from.name'),
+                    'email' => config('mail.from.address'),
+                ],
+                'to' => [[
+                    'email' => $toEmail,
+                    'name'  => $plainName,
+                ]],
+                'subject'     => "Your document request {$displayId} was rejected",
+                'htmlContent' => $html,
+            ]);
         } catch (\Throwable $e) {
             report($e);
             return response()->json(['message' => 'Email could not be sent.'], 500);
         }
 
         if ($response->failed()) {
-            report(new \RuntimeException('Resend error: ' . $response->body()));
+            report(new \RuntimeException('Brevo error: ' . $response->body()));
             return response()->json([
                 'message' => 'Email could not be sent.',
                 'detail'  => $response->json(),

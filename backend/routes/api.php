@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\AuthController; // RBAC
 use App\Http\Controllers\RequestController;
 use App\Http\Controllers\StudentController;
+use App\Http\Controllers\RequestNotificationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -83,4 +84,5 @@ Route::post('staff/{staff}/logout', [StaffController::class, 'setInactive']);
 
 Route::post('/students', [StudentController::class, 'store']);
 
-use App\Http\Controllers\RequestNotificationController;
+Route::post('/requests/{id}/notify-rejection', [RequestNotificationController::class, 'notifyRejection']);
+

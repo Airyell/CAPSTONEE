@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { supabase } from "./supabaseClient"; 
 import { logActivity } from "./activityLog"; // ADDED
-import { authHeaders } from "./rbac";
+import { authHeaders } from "./rbac"; // ADDED: sends the login token to Laravel
 import "./styles/Requests.css";
 
 const PAGE_SIZE = 10;
 
+// ADDED: Laravel API (same default as rbac.js / Login.jsx)
 const API_BASE =
   import.meta.env?.VITE_API_BASE_URL || "https://regisscan.onrender.com/api";
+
 
 function deriveStatus(docs) {
   if (docs.length === 0) return "Pending";
@@ -197,21 +199,144 @@ function YesNoField({ label, value, children }) {
   );
 }
 
-function RequestDetailsModal({ request, onClose, onSetDueDate, onCancel, cancelling }) {
-  // ADDED: rejection reason field shown after clicking "Reject Request"
-  const [showReason, setShowReason] = useState(false);
+// ADDED: modal that opens after clicking "Reject Request".
+// The email field is auto-filled with the student's email; staff can still edit it.
+function RejectEmailModal({ request, sending, errorMessage, onBack, onSend }) {
+  const [email, setEmail] = useState(request.email || "");
   const [reason, setReason] = useState("");
+
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const canSend = emailOk && reason.trim() !== "" && !sending;
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4"
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!sending) onBack();
+      }}
+    >
+      <div
+        className="w-full max-w-lg rounded-2xl bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-gray-100 px-6 py-4">
+          <h3 className="text-base font-semibold text-[#1f1d70]">
+            Reject {request.displayId}
+          </h3>
+          <p className="text-xs text-gray-500">
+            The student will be notified by email.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-4 px-6 py-5">
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+              To
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={sending}
+              placeholder="student@email.com"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-[#1f1d70] focus:outline-none disabled:opacity-50"
+            />
+            {email.trim() !== "" && !emailOk && (
+              <p className="mt-1 text-xs text-red-600">Enter a valid email address.</p>
+            )}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+              Subject
+            </label>
+            <input
+              type="text"
+              value={`Your document request ${request.displayId} was rejected`}
+              disabled
+              readOnly
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+              Reason for rejection
+            </label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={4}
+              disabled={sending}
+              autoFocus
+              placeholder="e.g. Lack of Form 137"
+              className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-[#1f1d70] focus:outline-none disabled:opacity-50"
+            />
+          </div>
+
+          {errorMessage && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+              {errorMessage}
+            </p>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-4">
+          <button
+            onClick={onBack}
+            disabled={sending}
+            className="inline-flex h-9 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-xs font-semibold text-gray-600 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Back
+          </button>
+          <button
+            onClick={() => onSend(reason.trim(), email.trim())}
+            disabled={!canSend}
+            className="inline-flex h-9 items-center justify-center rounded-lg border border-red-200 bg-white px-4 text-xs font-semibold text-red-600 shadow-sm transition hover:border-red-400 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {sending ? "Sending…" : "Reject & Send Email"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RequestDetailsModal({ request, onClose, onSetDueDate, onCancel, cancelling }) {
+  // CHANGED: opens the reject + email modal instead of an inline reason field
+  const [showReason, setShowReason] = useState(false);
+  const [rejectError, setRejectError] = useState("");
+  const [notice, setNotice] = useState(null); // { ok, text } shown after rejecting
 
   useEffect(() => {
     const onKeyDown = (e) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      if (showReason) {
+        if (!cancelling) setShowReason(false);
+      } else {
+        onClose();
+      }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, [onClose, showReason, cancelling]);
 
   if (!request) return null;
   const r = request;
+
+  const handleSend = async (reason, email) => {
+    setRejectError("");
+    const result = await onCancel(r.id, reason, email);
+
+    if (result?.saved) {
+      setShowReason(false);
+      setNotice({ ok: !!result.emailSent, text: result.message });
+    } else {
+      // Keep the modal open so staff can try again
+      setRejectError(result?.message || "Could not reject the request.");
+    }
+  };
 
   return (
     <div
@@ -366,51 +491,32 @@ function RequestDetailsModal({ request, onClose, onSetDueDate, onCancel, cancell
 
         {/* Footer */}
         <div className="border-t border-gray-100 px-8 py-5">
-          {/* ADDED: rejection reason field */}
-          {r.status === "Pending" && showReason && (
-            <div className="mb-3">
-              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                Rejection Reason
-              </label>
-              <textarea
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                rows={2}
-                placeholder="Enter the reason for rejecting this request..."
-                disabled={cancelling}
-                autoFocus
-                className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-[#1f1d70] focus:outline-none disabled:opacity-50"
-              />
-            </div>
+          {/* Result of the last reject / email attempt */}
+          {notice && (
+            <p
+              className={`mb-3 rounded-lg px-3 py-2 text-xs ${
+                notice.ok
+                  ? "bg-green-50 text-green-700"
+                  : "bg-amber-50 text-amber-800"
+              }`}
+            >
+              {notice.text}
+            </p>
           )}
 
           <div className="flex justify-end gap-2">
-            {r.status === "Pending" && !showReason && (
+            {r.status === "Pending" && (
               <button
-                onClick={() => setShowReason(true)}
+                onClick={() => {
+                  setRejectError("");
+                  setNotice(null);
+                  setShowReason(true);
+                }}
                 disabled={cancelling}
                 className="inline-flex h-9 items-center justify-center rounded-lg border border-red-200 bg-white px-4 text-xs font-semibold text-red-600 shadow-sm transition hover:border-red-400 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Reject Request
               </button>
-            )}
-            {r.status === "Pending" && showReason && (
-              <>
-                <button
-                  onClick={() => { setShowReason(false); setReason(""); }}
-                  disabled={cancelling}
-                  className="inline-flex h-9 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-xs font-semibold text-gray-600 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={() => onCancel(r.id, reason.trim())}
-                  disabled={cancelling || reason.trim() === ""}
-                  className="inline-flex h-9 items-center justify-center rounded-lg border border-red-200 bg-white px-4 text-xs font-semibold text-red-600 shadow-sm transition hover:border-red-400 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {cancelling ? "Rejecting…" : "Confirm Reject"}
-                </button>
-              </>
             )}
             <button
               onClick={onClose}
@@ -419,6 +525,16 @@ function RequestDetailsModal({ request, onClose, onSetDueDate, onCancel, cancell
               Close
             </button>
           </div>
+
+          {r.status === "Pending" && showReason && (
+            <RejectEmailModal
+              request={r}
+              sending={cancelling}
+              errorMessage={rejectError}
+              onBack={() => setShowReason(false)}
+              onSend={handleSend}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -674,13 +790,17 @@ export default function Requests() {
     setUpdatingId(null);
   };
 
-  // CHANGED: now takes a rejection reason, saved to tbl_request_document.rejection_reason
-  const handleCancel = async (id, rejectedReason) => {
+  // CHANGED: takes a rejection reason (saved to tbl_request_document.rejection_reason)
+  // and the email typed in the modal, then asks Laravel to email the student.
+  // Returns { saved, emailSent, message } so the modal can show the result.
+  const handleCancel = async (id, rejectedReason, toEmail) => {
     setUpdatingId(id);
     const request = requests.find(r => r.id === id);
     const idsToCancel = (request?.docs || [])
       .filter(d => d.status !== "Completed" && d.status !== "Rejected")
       .map(d => d.requestDocumentId);
+
+    let outcome = { saved: true, emailSent: false, message: "" };
 
     if (idsToCancel.length > 0) {
       const { error: updateError } = await supabase
@@ -698,7 +818,7 @@ export default function Requests() {
         });
         setError(updateError.message);
         setUpdatingId(null);
-        return;
+        return { saved: false, emailSent: false, message: updateError.message };
       }
 
       // ADDED: record in Audit Logs
@@ -712,16 +832,31 @@ export default function Requests() {
       try {
         const res = await fetch(`${API_BASE}/requests/${id}/notify-rejection`, {
           method: "POST",
-          headers: authHeaders(),
+          headers: authHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({ email: toEmail }),
         });
         const out = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(out.message || `HTTP ${res.status}`);
+
+        if (!res.ok) {
+          const detail = out.detail
+            ? ` (${typeof out.detail === "string" ? out.detail : JSON.stringify(out.detail)})`
+            : "";
+          throw new Error(
+            out.message ? `${out.message}${detail}` : `HTTP ${res.status}`
+          );
+        }
 
         logActivity({
           type: "Update",
-          description: `Sent rejection email to ${request?.studentName} for request ${request?.displayId}`,
+          description: `Sent rejection email to ${request?.studentName} (${toEmail}) for request ${request?.displayId}`,
           module: "Requests Module",
         });
+
+        outcome = {
+          saved: true,
+          emailSent: true,
+          message: `Request rejected. Email sent to ${toEmail}.`,
+        };
       } catch (emailErr) {
         logActivity({
           type: "Update",
@@ -729,7 +864,13 @@ export default function Requests() {
           module: "Requests Module",
           status: "failed",
         });
-        setError(`Request rejected, but the email was not sent: ${emailErr.message}`);
+
+        outcome = {
+          saved: true,
+          emailSent: false,
+          message: `Request rejected, but the email was not sent: ${emailErr.message}`,
+        };
+        setError(outcome.message);
       }
     }
 
@@ -751,6 +892,7 @@ export default function Requests() {
       )
     );
     setUpdatingId(null);
+    return outcome;
   };
 
   const handleSetDueDate = async (requestId, requestDocumentId, dateValue) => {
