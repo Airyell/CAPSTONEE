@@ -2652,8 +2652,8 @@ def extract_owner_name(
 # ============================================================
 
 NAME_LABEL_RE = re.compile(
-    r"^\s*(?:NAME OF (?:THE )?(?:STUDENT|PUPIL|LEARNER|CHILD)|"
-    r"(?:STUDENT|PUPIL|LEARNER|FULL)(?:'?S)? NAME|NAME)\s*[:;\-]?\s*(.*)$",
+    r"^\s*(?:NAME\s*OF\s*(?:THE\s*)?(?:STUDENT|PUPIL|LEARNER|CHILD)|"
+    r"(?:STUDENT|PUPIL|LEARNER|FULL)(?:'?S)?\s*NAME|NAME)\s*[:;\-]?\s*(.*)$",
     re.IGNORECASE,
 )
 
@@ -2743,8 +2743,16 @@ def extract_name_generic(items):
         ):
             continue
 
+        raw_value = match.group(1)
+
+        # Keep "LAST,FIRST" format: clean_name would strip the comma.
+        if "," in raw_value:
+            c_first, c_middle, c_last = _split_comma_name(raw_value)
+            if c_first and c_last:
+                return c_first, c_middle, c_last
+
         value = clean_name(
-            match.group(1)
+            raw_value
         )
 
         # Value is on the same text line as the label.
