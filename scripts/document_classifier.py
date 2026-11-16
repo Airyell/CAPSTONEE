@@ -593,9 +593,20 @@ def classify_document_type(raw_text, items=None, image_height=None):
             top_score, _, top_doc = ranked[0]
             runner_up = ranked[1][0] if len(ranked) > 1 else 0.0
 
+            # A generic name ("Certification") fully contained in a more
+            # specific one ("Certification of Live Birth") is not a real rival.
+            generic_runner_up = False
+            if len(ranked) > 1:
+                top_tokens = set(_tokens(top_doc["document_name"]))
+                run_tokens = set(_tokens(ranked[1][2]["document_name"]))
+                generic_runner_up = bool(run_tokens) and run_tokens < top_tokens
+
             if (
                 top_score >= HEADER_THRESHOLD
-                and top_score - runner_up >= HEADER_MARGIN
+                and (
+                    top_score - runner_up >= HEADER_MARGIN
+                    or generic_runner_up
+                )
             ):
                 result.update(
                     document_type=top_doc["document_name"],
