@@ -1,6 +1,5 @@
 import os
 import re
-import json
 import traceback
 import time
 import tempfile
@@ -18,11 +17,6 @@ from document_classifier import (
     SUPABASE_URL,
     SUPABASE_KEY,
 )
-
-
-
-from flask import Flask
-from flask_cors import CORS
 
 app = Flask(__name__)
 
@@ -77,8 +71,7 @@ def classifier_status():
 # OCR CONFIGURATION
 # ============================================================
 
-# mkldnn (oneDNN) is OFF by default because it crashes inference on some
-# Paddle 3.x / CPU / Windows setups. Set OCR_ENABLE_MKLDNN=1 to turn it on.
+
 OCR_ENABLE_MKLDNN = (
     os.environ.get("OCR_ENABLE_MKLDNN", "0") == "1"
 )
@@ -130,88 +123,53 @@ OCR_TEXTLINE_ORIENTATION = (
 
 
 # ============================================================
-# OCR ENGINE
+# OCR CONFIGURATION
 # ============================================================
-#
-# OCR_ENGINE=rapidocr  (default) -> ONNX Runtime. Fast on CPU and does not
-#                                   have the Paddle 3.x oneDNN crash.
-# OCR_ENGINE=paddle              -> original PaddleOCR 3.x engine.
-#
-# If rapidocr is not installed, the server falls back to PaddleOCR.
 
-OCR_ENGINE_NAME = os.environ.get("OCR_ENGINE", "rapidocr").strip().lower()
-
-OCR_DET_MODEL = os.environ.get(
-    "OCR_DET_MODEL",
-    "PP-OCRv5_mobile_det"
-)
-
-OCR_REC_MODEL = os.environ.get(
-    "OCR_REC_MODEL",
-    "PP-OCRv5_mobile_rec"
-)
-
-OCR_DOC_ORIENTATION = (
-    os.environ.get("OCR_DOC_ORIENTATION", "0") == "1"
-)
-
-
-def _build_paddle_engine():
-    from paddleocr import PaddleOCR
-
-    common = dict(
-        text_detection_model_name=OCR_DET_MODEL,
-        text_recognition_model_name=OCR_REC_MODEL,
-        device="cpu",
-        use_doc_orientation_classify=OCR_DOC_ORIENTATION,
-        use_doc_unwarping=False,
-        use_textline_orientation=OCR_TEXTLINE_ORIENTATION,
-        lang="en",
-    )
-
-    attempts = [
-        {
-            **common,
-            "enable_mkldnn": OCR_ENABLE_MKLDNN,
-            "cpu_threads": OCR_CPU_THREADS,
-        },
-        {
-            **common,
-        },
-        {
-            "device": "cpu",
-            "lang": "en",
-            "use_doc_orientation_classify": False,
-            "use_doc_unwarping": False,
-            "use_textline_orientation": False,
-        },
-    ]
-
-    last_error = None
-
-    for kwargs in attempts:
-        try:
-            print("[OCR] Initializing PaddleOCR...")
-
-            engine = PaddleOCR(**kwargs)
-
-            print(
-                "[OCR] PaddleOCR initialized successfully."
+try:
+    OCR_CPU_THREADS = max(
+        1,
+        int(
+            os.environ.get(
+                "OCR_CPU_THREADS",
+                min(4, os.cpu_count() or 4)
             )
-
-            return engine
-
-        except Exception as exc:
-            last_error = exc
-
-            print("[OCR] Initialization failed:")
-            print(str(exc))
-
-    raise RuntimeError(
-        "Could not initialize PaddleOCR: "
-        f"{last_error}"
+        )
     )
+except Exception:
+    OCR_CPU_THREADS = 4
 
+
+try:
+    # 1800-2000 is a useful speed/legibility balance for scanned records.
+    OCR_MAX_SIZE = max(500, int(os.environ.get("OCR_MAX_SIZE", "2000")))
+except Exception:
+    OCR_MAX_SIZE = 2000
+
+# Scan only the top part of the page first (the student name and the
+# document title are almost always there). The full page is only scanned
+# if the name or the document type was not found. Set OCR_UPPER_FIRST=0
+# to always scan the full page.
+OCR_UPPER_FIRST = os.environ.get("OCR_UPPER_FIRST", "1") == "1"
+
+try:
+    OCR_UPPER_FRACTION = min(
+        1.0,
+        max(0.25, float(os.environ.get("OCR_UPPER_FRACTION", "0.55")))
+    )
+except Exception:
+    OCR_UPPER_FRACTION = 0.55
+
+# Expensive image operations are opt-in. Enable only when a scan is poor.
+OCR_DESKEW = os.environ.get("OCR_DESKEW", "0") == "1"
+OCR_ENABLE_ENHANCED_FALLBACK = os.environ.get("OCR_ENABLE_ENHANCED_FALLBACK", "0") == "1"
+OCR_ENABLE_UPPER_FALLBACK = os.environ.get("OCR_ENABLE_UPPER_FALLBACK", "0") == "1"
+OCR_VERBOSE = os.environ.get("OCR_VERBOSE", "0") == "1"
+
+
+# ============================================================
+# OCR ENGINE (RapidOCR / ONNX Runtime)
+# ============================================================
 
 def _build_rapid_engine():
     """
@@ -249,30 +207,10 @@ def _build_rapid_engine():
 
 
 def _build_ocr_engine():
-    """
-    Returns (engine, backend_name).
-    """
-
-    if OCR_ENGINE_NAME != "paddle":
-        try:
-            engine, backend = _build_rapid_engine()
-
-            print(f"[OCR] RapidOCR ready ({backend}).")
-
-            return engine, backend
-
-        except ImportError:
-            print(
-                "[OCR] RapidOCR is not installed. "
-                "Run: pip install rapidocr-onnxruntime onnxruntime  "
-                "(falling back to PaddleOCR)"
-            )
-
-        except Exception as exc:
-            print("[OCR] RapidOCR failed to initialize:", exc)
-            print("[OCR] Falling back to PaddleOCR.")
-
-    return _build_paddle_engine(), "paddle"
+    """Returns (engine, backend_name)."""
+    engine, backend = _build_rapid_engine()
+    print(f"[OCR] RapidOCR ready ({backend}).")
+    return engine, backend
 
 
 ocr_engine, OCR_BACKEND = _build_ocr_engine()
@@ -579,256 +517,7 @@ def prepare_image(image):
     return image
 
 
-# ============================================================
-# OCR RESULT PARSING
-# ============================================================
 
-def safe_get(obj, key, default=None):
-    """
-    Safely retrieve a value from:
-    - dict
-    - PaddleOCR Result object
-    - objects exposing attributes
-    """
-
-    if obj is None:
-        return default
-
-    if isinstance(obj, dict):
-        return obj.get(key, default)
-
-    try:
-        value = getattr(obj, key)
-        return value
-    except Exception:
-        pass
-
-    return default
-
-
-def parse_ocr_result(result):
-    """
-    Parse PaddleOCR 3.x output across:
-    dict, JSON-string, list, tuple, and iterator forms.
-    """
-
-    items = []
-
-    if result is None:
-        print(
-            "[OCR PARSER] ERROR: PaddleOCR returned None."
-        )
-        return items
-
-    if OCR_VERBOSE:
-        print("[OCR PARSER] Incoming result type:", type(result).__name__)
-
-    json_result = None
-
-    try:
-        json_result = result.json
-    except Exception:
-        json_result = None
-
-    if json_result is not None:
-        if isinstance(json_result, str):
-            try:
-                json_result = json.loads(json_result)
-
-                print(
-                    "[OCR PARSER] Decoded result.json string."
-                )
-
-            except Exception as exc:
-                print(
-                    "[OCR PARSER] Could not decode result.json:",
-                    exc
-                )
-
-        if isinstance(json_result, dict):
-            result = json_result
-
-    if not isinstance(
-        result,
-        (dict, list, tuple, str, bytes)
-    ):
-        if not hasattr(result, "json"):
-            try:
-                result = list(result)
-            except (TypeError, Exception):
-                pass
-
-    if isinstance(result, (list, tuple)):
-        print(
-            "[OCR PARSER] Result sequence length:",
-            len(result)
-        )
-
-        for element in result:
-            items.extend(
-                parse_ocr_result(element)
-            )
-
-        return items
-
-    if isinstance(result, str):
-        try:
-            result = json.loads(result)
-
-        except Exception:
-            print(
-                "[OCR PARSER] Result was text but not valid JSON."
-            )
-            return items
-
-    if not isinstance(result, dict):
-        for key in (
-            "rec_texts",
-            "rec_scores",
-            "rec_polys",
-            "rec_boxes"
-        ):
-            if safe_get(result, key) is not None:
-                break
-        else:
-            print(
-                "[OCR PARSER] Unsupported result structure:",
-                type(result).__name__
-            )
-            return items
-
-    if (
-        isinstance(result, dict)
-        and isinstance(result.get("res"), dict)
-    ):
-        result = result["res"]
-
-    rec_texts = safe_get(
-        result,
-        "rec_texts"
-    )
-
-    rec_scores = safe_get(
-        result,
-        "rec_scores"
-    )
-
-    rec_polys = safe_get(
-        result,
-        "rec_polys"
-    )
-
-    if rec_polys is None:
-        rec_polys = safe_get(
-            result,
-            "dt_polys"
-        )
-
-    rec_boxes = safe_get(
-        result,
-        "rec_boxes"
-    )
-
-    if rec_texts is None:
-        print(
-            "[OCR PARSER] ERROR: rec_texts missing. Available keys:",
-            list(result.keys())
-            if isinstance(result, dict)
-            else "object attributes"
-        )
-
-        return items
-
-    try:
-        texts = list(rec_texts)
-    except Exception:
-        texts = []
-
-    try:
-        scores = (
-            list(rec_scores)
-            if rec_scores is not None
-            else []
-        )
-    except Exception:
-        scores = []
-
-    try:
-        polygons = (
-            list(rec_polys)
-            if rec_polys is not None
-            else []
-        )
-    except Exception:
-        polygons = []
-
-    try:
-        boxes = (
-            list(rec_boxes)
-            if rec_boxes is not None
-            else []
-        )
-    except Exception:
-        boxes = []
-
-    if OCR_VERBOSE:
-        print(f"[OCR PARSER] Arrays: texts={len(texts)}, scores={len(scores)}, polys={len(polygons)}, boxes={len(boxes)}")
-
-    for i, raw_text in enumerate(texts):
-        text = clean_text(raw_text)
-
-        if not text:
-            continue
-
-        try:
-            score = (
-                float(scores[i])
-                if i < len(scores)
-                else 0.0
-            )
-        except (TypeError, ValueError):
-            score = 0.0
-
-        box = None
-
-        if i < len(polygons):
-            try:
-                box = polygon_to_box(
-                    polygons[i]
-                )
-            except Exception:
-                box = None
-
-        if box is None and i < len(boxes):
-            try:
-                raw_box = np.asarray(
-                    boxes[i],
-                    dtype=float
-                ).flatten()
-
-                if len(raw_box) >= 4:
-                    box = tuple(
-                        float(v)
-                        for v in raw_box[:4]
-                    )
-
-            except Exception:
-                box = None
-
-        items.append(
-            {
-                "text": text,
-                "score": score,
-                "box": box
-            }
-        )
-
-    if OCR_VERBOSE:
-        print(f"[OCR PARSER] Parsed {len(items)} usable text detections.")
-        if items:
-            print("[OCR PARSER] First detections:", " | ".join(item["text"] for item in items[:12]))
-
-    return items
 
 
 # ============================================================
@@ -1117,111 +806,38 @@ def run_ocr(image):
         print("[OCR] Empty image received.")
         return []
 
-    if OCR_BACKEND != "paddle":
-        try:
-            prediction_start = time.perf_counter()
-
-            with ocr_lock:
-                if OCR_BACKEND == "rapidocr_onnxruntime":
-                    # Documents are upright, so the angle classifier
-                    # is skipped.
-                    raw = ocr_engine(image, use_cls=False)
-                else:
-                    raw = ocr_engine(image)
-
-            items = _rapid_result_to_items(raw)
-
-            breakdown = ""
-
-            if (
-                isinstance(raw, tuple)
-                and len(raw) > 1
-                and raw[1]
-            ):
-                try:
-                    breakdown = " (det/cls/rec: " + "/".join(
-                        f"{float(v):.1f}" for v in raw[1]
-                    ) + "s)"
-                except Exception:
-                    breakdown = ""
-
-            print(
-                f"[OCR] RapidOCR: {len(items)} detections in "
-                f"{time.perf_counter() - prediction_start:.2f}s"
-                f"{breakdown}"
-            )
-
-            return items
-
-        except Exception as exc:
-            print("")
-            print("================================================")
-            print("[OCR] RAPIDOCR PREDICTION ERROR")
-            print("================================================")
-            print(str(exc))
-
-            traceback.print_exc()
-
-            print("================================================")
-
-            return []
-
     try:
         prediction_start = time.perf_counter()
+
         with ocr_lock:
-            result = ocr_engine.predict(image)
-        items = parse_ocr_result(result)
-        if OCR_VERBOSE:
-            print(f"[OCR] Prediction + parsing: {time.perf_counter() - prediction_start:.3f}s; detections={len(items)}")
+            if OCR_BACKEND == "rapidocr_onnxruntime":
+                # Documents are upright, so the angle classifier is skipped.
+                raw = ocr_engine(image, use_cls=False)
+            else:
+                raw = ocr_engine(image)
+
+        items = _rapid_result_to_items(raw)
+
+        breakdown = ""
+        if isinstance(raw, tuple) and len(raw) > 1 and raw[1]:
+            try:
+                breakdown = " (det/cls/rec: " + "/".join(
+                    f"{float(v):.1f}" for v in raw[1]
+                ) + "s)"
+            except Exception:
+                breakdown = ""
+
+        print(
+            f"[OCR] RapidOCR: {len(items)} detections in "
+            f"{time.perf_counter() - prediction_start:.2f}s{breakdown}"
+        )
 
         return items
 
-    except AttributeError as exc:
-        print(
-            "[OCR] PaddleOCR predict() unavailable. "
-            "Trying legacy .ocr() API."
-        )
-
-        print(
-            "[OCR] AttributeError:",
-            str(exc)
-        )
-
-        try:
-            with ocr_lock:
-                result = ocr_engine.ocr(
-                    image,
-                    cls=OCR_TEXTLINE_ORIENTATION
-                )
-
-            items = parse_ocr_result(result)
-
-            print(
-                f"[OCR] Legacy API parsed "
-                f"{len(items)} text detections."
-            )
-
-            return items
-
-        except Exception as legacy_exc:
-            print(
-                "[OCR] Legacy OCR failed:",
-                str(legacy_exc)
-            )
-
-            return []
-
     except Exception as exc:
-        print("")
-        print("================================================")
-        print("[OCR] PREDICTION ERROR")
-        print("================================================")
+        print("[OCR] RAPIDOCR PREDICTION ERROR")
         print(str(exc))
-
         traceback.print_exc()
-
-        print("================================================")
-
         return []
 
 
@@ -3527,7 +3143,7 @@ def extract_document(image_path):
     items = None
     analysis = None
 
-    if OCR_UPPER_FIRST and OCR_BACKEND != "paddle":
+    if OCR_UPPER_FIRST:
         crop_bottom = max(
             1,
             int(h * OCR_UPPER_FRACTION)
@@ -3582,6 +3198,7 @@ def extract_document(image_path):
         time.perf_counter() - ocr_start
     )
 
+    initial_items = items
     upper_ocr_seconds = 0.0
     enhanced_ocr_seconds = 0.0
 
@@ -3796,14 +3413,18 @@ def extract_document(image_path):
     if OCR_VERBOSE and raw_text:
         print("[OCR RAW TEXT]", raw_text[:2500])
     elif not raw_text:
-        print("[OCR WARNING] PaddleOCR produced no parsed text.")
+        print("[OCR WARNING] OCR produced no parsed text.")
 
     # Final document classification.
-    document_classification = classify_document_type(
-        raw_text,
-        items,
-        h
-    )
+    if items is initial_items:
+        # OCR items did not change, so reuse the earlier classification.
+        document_classification = initial_classification
+    else:
+        document_classification = classify_document_type(
+            raw_text,
+            items,
+            h
+        )
 
     print(
         "[CLASSIFIER] type =", document_classification["document_type"],
@@ -4079,7 +3700,7 @@ if __name__ == "__main__":
     print("Mode   : Strict child extraction for birth certificates")
     print(f"Engine : {OCR_BACKEND}")
     print(f"Quick  : upper_first={OCR_UPPER_FIRST}, fraction={OCR_UPPER_FRACTION}")
-    print(f"Fast   : max_size={OCR_MAX_SIZE}, cpu_threads={OCR_CPU_THREADS}, mkldnn={OCR_ENABLE_MKLDNN} (paddle only)")
+    print(f"Fast   : max_size={OCR_MAX_SIZE}, cpu_threads={OCR_CPU_THREADS}")
     print(f"Fallbacks: enhanced={OCR_ENABLE_ENHANCED_FALLBACK}, upper={OCR_ENABLE_UPPER_FALLBACK}, deskew={OCR_DESKEW}")
 
     print("================================================")
