@@ -2923,7 +2923,41 @@ def _split_glued_name(token):
 
     return first, "", last
 
+    if len(first) < 2 or len(last) < 2:
+        return "", "", ""
 
+    return first, "", last
+
+
+def _parse_name_token(token):
+    """Turn one OCR name string (spaced, comma, or glued) into a name."""
+    token = (token or "").strip()
+
+    if not token:
+        return "", "", ""
+
+    if "," in token:
+        result = _split_comma_name(token)
+        return result if (result[0] and result[2]) else ("", "", "")
+
+    if " " in token:
+        words = [w for w in clean_name(token).split() if w]
+        words = [
+            w for i, w in enumerate(words)
+            if not (len(w) == 1 and 0 < i < len(words) - 1)
+        ]
+        return _split_particle_surname(words)
+
+    return _split_glued_name(token)
+
+
+def _mostly_upper(text):
+    letters = [c for c in text if c.isalpha()]
+
+    return (
+        len(letters) >= 4
+        and sum(c.isupper() for c in letters) / len(letters) >= 0.6
+    )
 
 def extract_name_extra(items):
     """
@@ -2989,7 +3023,7 @@ def extract_name_extra(items):
         if result[0] and result[2]:
             return result
 
-    # Fully glued OCR line: 'ThisistoCertifythatJUAND.DELAcRUz'
+    # (a) Name is in the same OCR line as "certify that"
     for item in boxed:
         g = re.search(r"(?i)certif(?:y|ies)\s*that\s*(.+)$", item["text"])
 
@@ -2997,21 +3031,54 @@ def extract_name_extra(items):
             continue
 
         token = re.split(r"\s+(?=[a-z])", g.group(1).strip())[0]
-
-        if " " in token.strip():
-            words = [w for w in clean_name(token).split() if w]
-            words = [
-                w for i, w in enumerate(words)
-                if not (len(w) == 1 and 0 < i < len(words) - 1)
-            ]
-            result = _split_particle_surname(words)
-        else:
-            result = _split_glued_name(token)
+        result = _parse_name_token(token)
 
         if result[0] and result[2]:
             return result
 
+    # (b) OCR split it: "certify that" and the name are separate detections
+    for item in boxed:
+        compact = re.sub(r"[^a-z]", "", item["text"].lower())
+
+        if not (
+            compact.endswith("certifythat")
+            or compact.endswith("certifiesthat")
+        ):
+            continue
+
+        if not item.get("box"):
+            continue
+
+        lb = item["box"]
+        lh = max(1.0, box_height(lb))
+
+        best, best_dx = None, 1e9
+
+        for other in boxed:
+            if other is item or not other.get("box"):
+                continue
+
+            ob = other["box"]
+
+            if vertical_overlap(lb, ob) < lh * 0.5 or ob[0] < lb[2] - 5:
+                continue
+
+            if not _mostly_upper(other["text"]):
+                continue
+
+            dx = ob[0] - lb[2]
+
+            if dx < best_dx:
+                best, best_dx = other, dx
+
+        if best:
+            result = _parse_name_token(best["text"])
+
+            if result[0] and result[2]:
+                return result
+
     return "", "", ""
+
 
 
 # ============================================================
