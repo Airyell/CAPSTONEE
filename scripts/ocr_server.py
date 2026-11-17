@@ -67,60 +67,6 @@ def classifier_status():
     )
 
 
-# ============================================================
-# OCR CONFIGURATION
-# ============================================================
-
-
-OCR_ENABLE_MKLDNN = (
-    os.environ.get("OCR_ENABLE_MKLDNN", "0") == "1"
-)
-
-try:
-    OCR_CPU_THREADS = max(
-        1,
-        int(
-            os.environ.get(
-                "OCR_CPU_THREADS",
-                min(4, os.cpu_count() or 4)
-            )
-        )
-    )
-except Exception:
-    OCR_CPU_THREADS = 4
-
-
-try:
-    # 1800-2000 is a useful speed/legibility balance for scanned records.
-    OCR_MAX_SIZE = max(500, int(os.environ.get("OCR_MAX_SIZE", "2000")))
-except Exception:
-    OCR_MAX_SIZE = 2000
-
-# Scan only the top part of the page first (the student name and the
-# document title are almost always there). The full page is only scanned
-# if the name or the document type was not found. This roughly halves the
-# OCR time. Set OCR_UPPER_FIRST=0 to always scan the full page.
-OCR_UPPER_FIRST = os.environ.get("OCR_UPPER_FIRST", "1") == "1"
-
-try:
-    OCR_UPPER_FRACTION = min(
-        1.0,
-        max(0.25, float(os.environ.get("OCR_UPPER_FRACTION", "0.55")))
-    )
-except Exception:
-    OCR_UPPER_FRACTION = 0.55
-
-# Expensive image operations are opt-in. Enable only when a scan is poor.
-OCR_DESKEW = os.environ.get("OCR_DESKEW", "0") == "1"
-OCR_ENABLE_ENHANCED_FALLBACK = os.environ.get("OCR_ENABLE_ENHANCED_FALLBACK", "0") == "1"
-OCR_ENABLE_UPPER_FALLBACK = os.environ.get("OCR_ENABLE_UPPER_FALLBACK", "0") == "1"
-OCR_VERBOSE = os.environ.get("OCR_VERBOSE", "0") == "1"
-
-
-OCR_TEXTLINE_ORIENTATION = (
-    os.environ.get("OCR_TEXTLINE_ORIENTATION", "0") == "1"
-)
-
 
 # ============================================================
 # OCR CONFIGURATION
@@ -1041,7 +987,8 @@ def find_owner_anchor(
 
 def select_owner_labels(
     items,
-    owner_anchor=None
+    owner_anchor=None,
+    allow_last_first_order=False
 ):
     """
     Select FIRST / MIDDLE / LAST labels belonging to
@@ -1559,9 +1506,13 @@ def select_owner_labels(
             last["box"]
         )
 
-        if not (
-            first_x < middle_x < last_x
-        ):
+        standard_order = first_x < middle_x < last_x
+        last_first_order = (
+            allow_last_first_order
+            and last_x < first_x < middle_x
+        )
+
+        if not (standard_order or last_first_order):
             continue
 
         y_values = [
@@ -1577,10 +1528,9 @@ def select_owner_labels(
         if vertical_spread > 35:
             continue
 
-        gap1 = middle_x - first_x
-        gap2 = last_x - middle_x
+        xs = sorted([first_x, middle_x, last_x])
 
-        if gap1 < 40 or gap2 < 40:
+        if xs[1] - xs[0] < 40 or xs[2] - xs[1] < 40:
             continue
 
         complete_rows.append(
@@ -2293,7 +2243,8 @@ def extract_owner_name(
 
     selected = select_owner_labels(
         items,
-        owner_anchor=owner_anchor
+        owner_anchor=owner_anchor,
+        allow_last_first_order=not strict_child_section
     )
 
     child_section_bottom = (
