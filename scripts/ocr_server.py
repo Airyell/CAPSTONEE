@@ -2879,6 +2879,51 @@ def _split_comma_name(raw):
 
     return " ".join(words), "", last
 
+_NAME_PARTICLES = {
+    "DE", "DEL", "DELA", "DELOS", "DELAS", "LA",
+    "SAN", "SANTA", "VAN", "VON", "DI", "DA",
+}
+
+
+def _split_particle_surname(words):
+    """['JUANA', 'DELA', 'PAZ'] -> ('JUANA', '', 'DELA PAZ')."""
+    words = [w for w in words if w]
+
+    if len(words) < 2:
+        return "", "", ""
+
+    k = len(words) - 1
+    while k > 1 and words[k - 1].upper() in _NAME_PARTICLES:
+        k -= 1
+
+    return " ".join(words[:k]), "", " ".join(words[k:])
+
+
+def _split_glued_name(token):
+    """
+    OCR sometimes drops every space: 'JUAND.DELAcRUz'.
+    The period after the middle initial is the only reliable marker.
+    """
+    t = re.sub(r"[^A-Za-zÑñ.]", "", token or "").upper()
+    parts = [p for p in t.split(".") if p]
+
+    if "." not in t or len(parts) < 2:
+        return "", "", ""
+
+    if len(parts) >= 3:
+        first = parts[0]
+    else:
+        # 'JUAND' -> 'JUAN' (drop the glued middle initial)
+        first = parts[0][:-1] if len(parts[0]) >= 3 else parts[0]
+
+    last = parts[-1]
+
+    if len(first) < 2 or len(last) < 2:
+        return "", "", ""
+
+    return first, "", last
+
+
 
 def extract_name_extra(items):
     """
@@ -2921,6 +2966,11 @@ def extract_name_extra(items):
     # --- 2. "certify that ..." sentence ---
     text = _reading_order_text(items) or " ".join(i["text"] for i in boxed)
 
+    # Underlines are often read as "____"; "certify that" may lose its space.
+    text = re.sub(r"[_|]+", " ", text)
+    text = re.sub(r"(?i)certify\s*that", "certify that", text)
+    text = re.sub(r"\s+", " ", text)
+
     m = _CERTIFY_COMMA_RE.search(text)
     if m:
         return _split_comma_name(m.group(1))
@@ -2928,10 +2978,38 @@ def extract_name_extra(items):
     m = _CERTIFY_PLAIN_RE.search(text)
     if m:
         words = [w for w in clean_name(m.group(1)).split() if w]
-        if len(words) >= 2:
-            if len(words) > 2 and len(words[-2]) == 1:
-                del words[-2]
-            return " ".join(words[:-1]), "", words[-1]
+
+        # Drop a middle initial such as the "D." in "JUANA D. DELA PAZ".
+        words = [
+            w for i, w in enumerate(words)
+            if not (len(w) == 1 and 0 < i < len(words) - 1)
+        ]
+
+        result = _split_particle_surname(words)
+        if result[0] and result[2]:
+            return result
+
+    # Fully glued OCR line: 'ThisistoCertifythatJUAND.DELAcRUz'
+    for item in boxed:
+        g = re.search(r"(?i)certif(?:y|ies)\s*that\s*(.+)$", item["text"])
+
+        if not g:
+            continue
+
+        token = re.split(r"\s+(?=[a-z])", g.group(1).strip())[0]
+
+        if " " in token.strip():
+            words = [w for w in clean_name(token).split() if w]
+            words = [
+                w for i, w in enumerate(words)
+                if not (len(w) == 1 and 0 < i < len(words) - 1)
+            ]
+            result = _split_particle_surname(words)
+        else:
+            result = _split_glued_name(token)
+
+        if result[0] and result[2]:
+            return result
 
     return "", "", ""
 
