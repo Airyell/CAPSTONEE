@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { supabase } from "./supabaseClient";
+import { friendlyError } from "./friendlyError"; // ADDED (safe errors)
 import "./styles/AuditLogs.css";
 
 const activityTypes = ["Upload", "View", "Update", "Login"];
@@ -56,7 +57,7 @@ export default function AuditLogs() {
       if (!isMounted) return;
 
       if (error) {
-        setErrorMsg(error.message);
+        setErrorMsg(friendlyError(error, "Please try again.")); // CHANGED (safe errors): no database text shown
         setLogs([]);
       } else {
         setLogs((data || []).map(mapLogRow));

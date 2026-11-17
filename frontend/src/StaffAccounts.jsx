@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import "./styles/StaffAccounts.css";
 import { authHeaders } from "./rbac"; // RBAC
+import { friendlyError } from "./friendlyError"; // ADDED (safe errors)
 
 const API_BASE = import.meta.env?.VITE_API_BASE_URL || "https://regisscan.onrender.com/api";
 
@@ -37,7 +38,7 @@ export default function StaffAccounts() {
       setStaff(json.data);
       setMeta(json.meta);
     } catch (err) {
-      setLoadError(err.message);
+      setLoadError(friendlyError(err, "Something went wrong. Please try again.")); // CHANGED (safe errors)
     } finally {
       setLoading(false);
     }
@@ -128,7 +129,7 @@ export default function StaffAccounts() {
       await loadStaff();
       setDeleteTarget(null);
     } catch (err) {
-      setLoadError(err.message);
+      setLoadError(friendlyError(err, "Something went wrong. Please try again.")); // CHANGED (safe errors)
       setDeleteTarget(null);
     }
   }

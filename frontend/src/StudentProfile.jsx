@@ -4,6 +4,7 @@ import DocumentScanner from "./DocumentScanner.jsx";
 import useDocumentScanner from "./useDocumentScanner";
 import { isPdf } from "./scannerUtils";
 import { logActivity } from "./activityLog";
+import { friendlyError } from "./friendlyError"; // ADDED (safe errors)
 import "./styles/Students.css";
 import "./styles/StudentProfile.css";
 import "./styles/Dashboard.css";
@@ -513,7 +514,7 @@ export default function StudentProfile({ studentId, onBack }) {
       await loadDocuments(student.student_id);
     } catch (err) {
       console.error("Add document type failed:", err);
-      setError(err.message || "Failed to add document type.");
+      setError(friendlyError(err, "Failed to add document type.")); // CHANGED (safe errors)
     } finally {
       setAddingType(false);
     }
@@ -740,8 +741,10 @@ export default function StudentProfile({ studentId, onBack }) {
       console.error("Document upload OCR error:", err);
 
       alert(
-        err.message ||
+        friendlyError(
+          err,
           "Failed to upload and process the document. Please try again."
+        ) // CHANGED (safe errors)
       );
     } finally {
       setUploadingFile(false);
@@ -803,7 +806,7 @@ export default function StudentProfile({ studentId, onBack }) {
         await loadDocuments(studentRes.data.student_id);
       } catch (err) {
         if (!cancelled) {
-          setError(err.message || "Failed to load student.");
+          setError(friendlyError(err, "Failed to load student.")); // CHANGED (safe errors)
         }
       } finally {
         if (!cancelled) {
@@ -928,7 +931,7 @@ export default function StudentProfile({ studentId, onBack }) {
       setShowEditModal(false);
     } catch (err) {
       console.error("Update error:", err);
-      setError(err.message || "Failed to update student.");
+      setError(friendlyError(err, "Failed to update student.")); // CHANGED (safe errors)
     } finally {
       setSaving(false);
     }

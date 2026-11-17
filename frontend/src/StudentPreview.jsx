@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { supabase } from "./supabaseClient";
+import { friendlyError } from "./friendlyError"; 
 
 const requestTypes = [
   { label: "Authentication (₱5/page)", value: "Authentication", price: 5 },
@@ -223,8 +224,7 @@ export default function StudentPreview({ onBack }) {
       .order("date_request", { ascending: false });
 
     if (error) {
-      console.error(error);
-      alert("Could not fetch requests: " + error.message);
+      alert(friendlyError(error, "Could not load requests. Please try again.")); // CHANGED (safe errors): no database text shown
       return;
     }
 
@@ -325,6 +325,22 @@ export default function StudentPreview({ onBack }) {
       subject_sy_end:         subjectSY2 || null,
     };
 
+    // ADDED (safe errors): make sure the Student ID exists before submitting,
+    // so the student never sees a database error for an unknown ID
+    const { data: foundStudent, error: lookupError } = await supabase
+      .from("tbl_student")
+      .select("student_id")
+      .eq("student_id", parseInt(formStudentId, 10))
+      .maybeSingle();
+
+    if (lookupError) {
+      return alert(friendlyError(lookupError, "We couldn't verify your Student ID. Please try again."));
+    }
+
+    if (!foundStudent) {
+      return alert("Student ID not found. Please check your ID or contact the Registrar's Office.");
+    }
+
     setSubmitting(true);
     try {
       await axios.post("/api/request", data);
@@ -333,8 +349,8 @@ export default function StudentPreview({ onBack }) {
       setShowForm(false);
       if (studentId === formStudentId) searchRequest();
     } catch (error) {
-      console.error(error.response?.data ?? error.message);
-      alert("Error: " + (error.response?.data?.message ?? "Something went wrong"));
+      // CHANGED (safe errors): the real error stays in the console, the student sees a safe message
+      alert(friendlyError(error, "We couldn't submit your request. Please check your details and try again."));
     } finally {
       setSubmitting(false);
     }

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import "./styles/AdminDashboard.css";
 import { useAuth } from "./AuthContext"; // RBAC
+import { friendlyError } from "./friendlyError"; // ADDED (safe errors)
 
 const navItems = ["Dashboard", "Staff Accounts", "System Reports", "Audit Logs"];
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -152,7 +153,7 @@ export default function AdminDashboard({ staffName = "Admin", onLogout, activePa
         setCredentialDist(distArray);
         setActivities(mappedActivities);
       } catch (err) {
-        if (isMounted) setErrorMsg(err.message || "Failed to load dashboard data");
+        if (isMounted) setErrorMsg(friendlyError(err, "Please try again.")); // CHANGED (safe errors): no database text shown
       } finally {
         if (isMounted) setLoading(false);
       }

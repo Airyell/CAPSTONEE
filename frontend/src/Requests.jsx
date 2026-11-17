@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { supabase } from "./supabaseClient"; 
 import { logActivity } from "./activityLog"; // ADDED
 import { authHeaders } from "./rbac"; // ADDED: sends the login token to Laravel
+import { friendlyError } from "./friendlyError"; // ADDED (safe errors)
 import "./styles/Requests.css";
 
 const PAGE_SIZE = 10;
@@ -611,7 +612,7 @@ export default function Requests() {
       .order("date_request", { ascending: false });
 
     if (fetchError) {
-      setError(fetchError.message);
+      setError(friendlyError(fetchError, "Could not load requests.")); // CHANGED (safe errors)
       setLoading(false);
       return;
     }
@@ -766,7 +767,7 @@ export default function Requests() {
           module: "Requests Module",
           status: "failed",
         });
-        setError(updateError.message);
+        setError(friendlyError(updateError, "Could not update the request.")); // CHANGED (safe errors)
         setUpdatingId(null);
         return;
       }
@@ -825,9 +826,10 @@ export default function Requests() {
           module: "Requests Module",
           status: "failed",
         });
-        setError(updateError.message);
+        const safeMessage = friendlyError(updateError, "Could not update the request."); // CHANGED (safe errors)
+        setError(safeMessage);
         setUpdatingId(null);
-        return { saved: false, emailSent: false, message: updateError.message };
+        return { saved: false, emailSent: false, message: safeMessage };
       }
 
       // ADDED: record in Audit Logs
@@ -919,7 +921,7 @@ export default function Requests() {
         module: "Requests Module",
         status: "failed",
       });
-      setError(updateError.message);
+      setError(friendlyError(updateError, "Could not save the due date.")); // CHANGED (safe errors)
       return;
     }
 

@@ -4,6 +4,7 @@ import "./styles/Students.css";
 import { useAuth } from "./AuthContext"; // RBAC
 import { PERMISSIONS } from "./rbac"; // RBAC
 import { logActivity } from "./activityLog"; // ADDED
+import { friendlyError } from "./friendlyError"; // ADDED (safe errors)
 
 const yearLevels = ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"];
 const statuses = ["Active", "LOA", "Inactive", "Graduated"];
@@ -527,7 +528,7 @@ export default function Students({ onViewStudent }) {
             "A student with this ID or the same name (folder) already exists."
           );
         } else {
-          alert("Failed to save student: " + insertError.message);
+          alert(friendlyError(insertError, "Failed to save the student. Please try again.")); // CHANGED (safe errors)
         }
         return;
       }
@@ -603,7 +604,7 @@ export default function Students({ onViewStudent }) {
       alert(
         studentSaved
           ? "The student was saved, but an unexpected error occurred. Check the console."
-          : "Failed to add student: " + error.message
+          : friendlyError(error, "Failed to add the student. Please try again.") // CHANGED (safe errors)
       );
     } finally {
       setSubmitting(false);

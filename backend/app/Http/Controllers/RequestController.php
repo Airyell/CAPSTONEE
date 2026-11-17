@@ -31,7 +31,7 @@ class RequestController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'student_id'  => 'required|integer',
+            'student_id'  => 'required|integer|exists:tbl_student,student_id', // CHANGED (safe errors): unknown student returns a clean 422 message
             'document_id' => 'required|integer',
             'documents'   => 'required|array',
             'documents.*' => 'integer',
